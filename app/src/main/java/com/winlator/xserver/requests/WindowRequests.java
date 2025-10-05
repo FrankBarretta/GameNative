@@ -12,6 +12,7 @@ import com.winlator.xserver.WindowAttributes;
 import com.winlator.xserver.errors.BadDrawable;
 import com.winlator.xserver.errors.BadIdChoice;
 import com.winlator.xserver.errors.BadValue;
+import com.winlator.xserver.errors.BadWindow;
 import com.winlator.xserver.events.CreateNotify;
 import com.winlator.xserver.events.Event;
 import com.winlator.xserver.Property;
@@ -111,8 +112,15 @@ public abstract class WindowRequests {
         client.xServer.windowManager.destroyWindow(inputStream.readInt());
     }
 
-    public static void destroySubWindows(XClient client, XInputStream inputStream, XOutputStream outputStream) {
-        client.xServer.windowManager.destroyWindow(inputStream.readInt());
+    public static void destroySubWindows(XClient client, XInputStream inputStream, XOutputStream outputStream) throws XRequestError {
+        int windowId = inputStream.readInt();
+        Window window = client.xServer.windowManager.getWindow(windowId);
+        if (window == null) {
+            throw new BadWindow(windowId);
+        }
+        for (Window child : window.getChildren()) {
+            client.xServer.windowManager.destroyWindow(child.id);
+        }
     }
 
     public static void reparentWindow(XClient client, XInputStream inputStream, XOutputStream outputStream) throws XRequestError {
@@ -142,21 +150,7 @@ public abstract class WindowRequests {
         if (window == null) {
             throw new BadWindow(windowId);
         }
-        for (Window child : window.getChildren()) {
-            mapSubWindows(client, child.id);
-        }
-        client.xServer.windowManager.mapWindow(window);
-    }
-
-    private static void mapSubWindows(XClient client, int windowId) throws XRequestError {
-        Window window = client.xServer.windowManager.getWindow(windowId);
-        if (window == null) {
-            throw new BadWindow(windowId);
-        }
-        for (Window child : window.getChildren()) {
-            mapSubWindows(client, child.id);
-        }
-        client.xServer.windowManager.mapWindow(window);
+        client.xServer.windowManager.mapSubWindows(window);
     }
 
     public static void unmapWindow(XClient client, XInputStream inputStream, XOutputStream outputStream) throws XRequestError {

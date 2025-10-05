@@ -42,9 +42,10 @@ public abstract class AtomRequests {
             outputStream.writeByte((byte) 1);
             outputStream.writeByte((byte) 0);
             outputStream.writeShort(client.getSequenceNumber());
-            outputStream.writeInt((length + 22) / 4);
-            outputStream.writeString8(name);
+            outputStream.writeInt((((-length) & 3) + length) / 4);
+            outputStream.writeShort((short) length);
             outputStream.writePad(22);
+            outputStream.writeString8(name);
         }
     }
 }
