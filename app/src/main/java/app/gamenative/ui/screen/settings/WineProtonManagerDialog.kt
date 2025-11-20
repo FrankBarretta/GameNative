@@ -67,6 +67,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
 
     var isBusy by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
+    var isStatusSuccess by remember { mutableStateOf(false) }
 
     var pendingProfile by remember { mutableStateOf<ContentProfile?>(null) }
     val untrustedFiles = remember { mutableStateListOf<ContentProfile.ContentFile>() }
@@ -94,18 +95,22 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
         }
     }
 
-    LaunchedEffect(Unit) {
-        try {
-            withContext(Dispatchers.IO) { mgr.syncContents() }
-        } catch (_: Exception) {}
-        refreshInstalled()
+    LaunchedEffect(open) {
+        if (open) {
+            try {
+                withContext(Dispatchers.IO) { mgr.syncContents() }
+            } catch (_: Exception) {}
+            refreshInstalled()
+        }
     }
 
-    // Cleanup on dialog dismiss
+    // Cleanup on dialog dismiss - only reset if not actually busy importing
     androidx.compose.runtime.DisposableEffect(Unit) {
         onDispose {
-            // Reset importing flag when dialog is closed
-            SteamService.isImporting = false
+            // Only reset importing flag if we're not in the middle of an actual import
+            if (!isBusy) {
+                SteamService.isImporting = false
+            }
         }
     }
 
@@ -138,6 +143,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
 
             if (detectedType == null) {
                 statusMessage = ctx.getString(R.string.wine_proton_filename_error)
+                isStatusSuccess = false
                 Toast.makeText(ctx, statusMessage, Toast.LENGTH_LONG).show()
                 isBusy = false
                 SteamService.isImporting = false
@@ -211,6 +217,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                 } else {
                     error?.message?.let { "$msg: $it" } ?: msg
                 }
+                isStatusSuccess = false
                 android.util.Log.e("WineProtonManager", "Import failed: $statusMessage", error)
                 Toast.makeText(ctx, statusMessage, Toast.LENGTH_LONG).show()
                 isBusy = false
@@ -222,6 +229,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
             if (profile.type != ContentProfile.ContentType.CONTENT_TYPE_WINE &&
                 profile.type != ContentProfile.ContentType.CONTENT_TYPE_PROTON) {
                 statusMessage = ctx.getString(R.string.wine_proton_not_wine_or_proton, profile.type)
+                isStatusSuccess = false
                 Toast.makeText(ctx, statusMessage, Toast.LENGTH_LONG).show()
                 isBusy = false
                 SteamService.isImporting = false
@@ -231,6 +239,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
             // Verify detected type matches package type
             if (profile.type != detectedType) {
                 statusMessage = ctx.getString(R.string.wine_proton_type_mismatch, detectedType, profile.type)
+                isStatusSuccess = false
                 Toast.makeText(ctx, statusMessage, Toast.LENGTH_LONG).show()
                 isBusy = false
                 SteamService.isImporting = false
@@ -245,13 +254,15 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
             if (untrustedFiles.isNotEmpty()) {
                 showUntrustedConfirm = true
                 statusMessage = ctx.getString(R.string.wine_proton_untrusted_files_detected)
+                isStatusSuccess = false
                 isBusy = false
             } else {
                 // Safe to finish install directly
-                performFinishInstall(ctx, mgr, profile) { msg ->
+                performFinishInstall(ctx, mgr, profile) { msg, success ->
                     pendingProfile = null
                     refreshInstalled()
                     statusMessage = msg
+                    isStatusSuccess = success
                     isBusy = false
                 }
             }
@@ -348,7 +359,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                     Text(
                         text = statusMessage ?: "",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
+                        color = if (isStatusSuccess) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                     )
                 }
 
@@ -384,10 +395,11 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                         Button(
                             onClick = {
                                 scope.launch {
-                                    performFinishInstall(ctx, mgr, profile) { msg ->
+                                    performFinishInstall(ctx, mgr, profile) { msg, success ->
                                         pendingProfile = null
                                         refreshInstalled()
                                         statusMessage = msg
+                                        isStatusSuccess = success
                                     }
                                 }
                             },
@@ -420,7 +432,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(text = "${p.type}: ${p.verName} (${p.verCode})", style = MaterialTheme.typography.bodyMedium)
+                                    Text(text = "${p.type}: ${p.verName}", style = MaterialTheme.typography.bodyMedium)
                                     if (!p.desc.isNullOrEmpty()) {
                                         Text(text = p.desc, style = MaterialTheme.typography.bodySmall)
                                     }
@@ -478,10 +490,11 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                     showUntrustedConfirm = false
                     isBusy = true
                     scope.launch {
-                        performFinishInstall(ctx, mgr, profile) { msg ->
+                        performFinishInstall(ctx, mgr, pendingProfile!!) { msg, success ->
                             pendingProfile = null
                             refreshInstalled()
                             statusMessage = msg
+                            isStatusSuccess = success
                             isBusy = false
                         }
                     }
@@ -492,6 +505,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                     showUntrustedConfirm = false
                     pendingProfile = null
                     statusMessage = null
+                    isStatusSuccess = false
                 }) { Text(stringResource(R.string.cancel)) }
             }
         )
@@ -606,10 +620,11 @@ private suspend fun performFinishInstall(
     context: Context,
     mgr: ContentsManager,
     profile: ContentProfile,
-    onDone: (String) -> Unit,
+    onDone: (String, Boolean) -> Unit,
 ) {
-    val msg = withContext(Dispatchers.IO) {
+    val result = withContext(Dispatchers.IO) {
         var message = ""
+        var success = false
         val latch = CountDownLatch(1)
         try {
             mgr.finishInstallContent(profile, object : ContentsManager.OnInstallFinishedCallback {
@@ -619,23 +634,34 @@ private suspend fun performFinishInstall(
                         ContentsManager.InstallFailedReason.ERROR_NOSPACE -> context.getString(R.string.wine_proton_error_nospace)
                         else -> context.getString(R.string.wine_proton_install_failed, e.message ?: context.getString(R.string.wine_proton_error_unknown))
                     }
+                    success = false
                     latch.countDown()
                 }
 
                 override fun onSucceed(profileArg: ContentProfile) {
                     message = context.getString(R.string.wine_proton_install_success, profileArg.type, profileArg.verName)
+                    success = true
                     latch.countDown()
                 }
             })
         } catch (e: Exception) {
             message = context.getString(R.string.wine_proton_install_error, e.message ?: "")
+            success = false
             latch.countDown()
         }
         latch.await()
-        message
+
+        // Sync contents after installation completes (success or failure)
+        try {
+            mgr.syncContents()
+        } catch (e: Exception) {
+            android.util.Log.e("WineProtonManager", "Error syncing contents after install", e)
+        }
+
+        message to success
     }
-    onDone(msg)
-    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+    onDone(result.first, result.second)
+    Toast.makeText(context, result.first, Toast.LENGTH_SHORT).show()
 }
 
 @androidx.compose.ui.tooling.preview.Preview
