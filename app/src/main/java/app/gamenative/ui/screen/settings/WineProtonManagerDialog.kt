@@ -101,6 +101,14 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
         refreshInstalled()
     }
 
+    // Cleanup on dialog dismiss
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            // Reset importing flag when dialog is closed
+            SteamService.isImporting = false
+        }
+    }
+
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) {
             SteamService.isImporting = false
@@ -497,14 +505,14 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                 try {
                     val containerManager = ContainerManager(ctx)
                     val containers = containerManager.containers
-                    
+
                     // Build identifier patterns to match against
                     val identifierPattern = "${target.verName}-${target.verCode}"
-                    
+
                     containers.forEach { container ->
                         val wineVersion = container.wineVersion
                         android.util.Log.d("WineProtonManager", "Checking container ${container.name}: wineVersion=$wineVersion against $identifierPattern")
-                        
+
                         // Check if container's wine version matches this profile
                         if (wineVersion != null && wineVersion.contains(target.verName, ignoreCase = true)) {
                             add(container.name)
@@ -517,7 +525,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                 }
             }
         }
-        
+
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
             title = { Text(stringResource(R.string.wine_proton_remove_title)) },
@@ -527,7 +535,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                         text = stringResource(R.string.wine_proton_remove_message, target.type, target.verName, target.verCode),
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
-                    
+
                     if (affectedContainers.isNotEmpty()) {
                         Text(
                             text = stringResource(R.string.wine_proton_containers_will_break),
