@@ -3,7 +3,6 @@ package com.winlator.core;
 import android.content.Context;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.util.Log;
 
 import androidx.annotation.NonNull;
 
@@ -156,61 +155,29 @@ public class WineInfo implements Parcelable {
 
     @NonNull
     public static WineInfo fromIdentifier(Context context, ContentsManager contentsManager, String identifier) {
-        ImageFs imageFs = ImageFs.find(context);
-        String path = "";
-
+        // Handle main Wine version
         if (identifier.equals(MAIN_WINE_VERSION.identifier())) {
-            Log.d("WineInfo", "Using MAIN_WINE_VERSION: " + identifier);
             return new WineInfo(MAIN_WINE_VERSION.type, MAIN_WINE_VERSION.version, MAIN_WINE_VERSION.arch, null);
         }
 
-        // Try multiple lookup variations to handle different identifier formats
-        ContentProfile wineProfile = null;
+        // Try to find profile using multiple lookup strategies
+        ContentProfile wineProfile = findWineProfile(contentsManager, identifier);
 
-        // Try with version code 0 appended
-        Log.d("WineInfo", "Trying lookup with: '" + identifier + "-0'");
-        wineProfile = contentsManager.getProfileByEntryName(identifier + "-0");
-
-        // Try identifier as-is
-        if (wineProfile == null) {
-            Log.d("WineInfo", "First lookup failed, trying: '" + identifier + "'");
-            wineProfile = contentsManager.getProfileByEntryName(identifier);
-        }
-
-        // Try with capitalized type (e.g., "proton" → "Proton")
-        if (wineProfile == null && (identifier.startsWith("proton-") || identifier.startsWith("wine-"))) {
-            String capitalizedIdentifier = Character.toUpperCase(identifier.charAt(0)) + identifier.substring(1);
-            Log.d("WineInfo", "🔍 BREAKPOINT 1: Starting capitalized lookup. capitalizedIdentifier='" + capitalizedIdentifier + "'");
-            for (int verCode = 0; verCode <= 10 && wineProfile == null; verCode++) {
-                String lookup = capitalizedIdentifier + "-" + verCode;
-                Log.d("WineInfo", "🔍 BREAKPOINT 2: Trying with capitalized type and version code " + verCode + ": '" + lookup + "'");
-                wineProfile = contentsManager.getProfileByEntryName(lookup);
-                Log.d("WineInfo", "🔍 BREAKPOINT 3: getProfileByEntryName('" + lookup + "') returned: " + (wineProfile != null ? "PROFILE OBJECT" : "NULL"));
-                if (wineProfile != null) {
-                    Log.d("WineInfo", "🔍 BREAKPOINT 4: ✅ FOUND PROFILE at version code " + verCode);
-                    break;
-                }
-            }
-        }
-
-        // Try replacing dots with dashes (e.g., "proton-10.0-arm64ec" → "proton-10-arm64ec-0")
-        if (wineProfile == null && identifier.contains(".")) {
-            String identifierWithDashes = identifier.replace('.', '-');
-            Log.d("WineInfo", "Trying with dots replaced by dashes: '" + identifierWithDashes + "-0'");
-            wineProfile = contentsManager.getProfileByEntryName(identifierWithDashes + "-0");
-        }
-
-        // Try replacing dots with dashes, no version code
-        if (wineProfile == null && identifier.contains(".")) {
-            String identifierWithDashes = identifier.replace('.', '-');
-            Log.d("WineInfo", "Trying with dots replaced by dashes, no suffix: '" + identifierWithDashes + "'");
-            wineProfile = contentsManager.getProfileByEntryName(identifierWithDashes);
-        }
-
-        Log.d("WineInfo", "Wine profile lookup result: " + (wineProfile != null ? "FOUND" : "NULL"));
+        // Parse identifier components using regex
         Matcher matcher = pattern.matcher(identifier);
+        if (!matcher.find()) {
+            // Identifier doesn't match expected pattern, fall back to main Wine
+            return new WineInfo(MAIN_WINE_VERSION.type, MAIN_WINE_VERSION.version, MAIN_WINE_VERSION.arch, null);
+        }
 
-        if (matcher.find()) {
+        String type = matcher.group(1);
+        String version = matcher.group(2);
+        String arch = matcher.group(4);
+        String path = "";
+
+        // Check if it's a built-in bionic Wine version
+        if (wineProfile == null) {
+            ImageFs imageFs = ImageFs.find(context);
             String[] wineVersions = context.getResources().getStringArray(R.array.bionic_wine_entries);
             for (String wineVersion : wineVersions) {
                 if (wineVersion.contains(identifier)) {
@@ -218,24 +185,66 @@ public class WineInfo implements Parcelable {
                     break;
                 }
             }
+            return new WineInfo(type, version, arch, path);
+        }
 
-            if (wineProfile != null && (wineProfile.type == ContentProfile.ContentType.CONTENT_TYPE_WINE || wineProfile.type == ContentProfile.ContentType.CONTENT_TYPE_PROTON)) {
-                path = ContentsManager.getInstallDir(context, wineProfile).getPath();
-                Log.d("WineInfo", "Wine path for wineinfo: " + path);
+        // Use imported Wine/Proton profile
+        if (wineProfile.type == ContentProfile.ContentType.CONTENT_TYPE_WINE
+                || wineProfile.type == ContentProfile.ContentType.CONTENT_TYPE_PROTON) {
+            path = ContentsManager.getInstallDir(context, wineProfile).getPath();
+            WineInfo wineInfo = new WineInfo(type, version, arch, path);
+            wineInfo.libPath = wineProfile.wineLibPath;
+            return wineInfo;
+        }
 
-                // Create WineInfo and set libPath from profile
-                WineInfo wineInfo = new WineInfo(matcher.group(1), matcher.group(2), matcher.group(4), path);
-                wineInfo.libPath = wineProfile.wineLibPath;
-                Log.d("WineInfo", "Wine libPath from profile: " + wineInfo.libPath);
-                return wineInfo;
-            } else {
-                Log.d("WineInfo", "Wine path for wineinfo is null - wineProfile not found or not Wine/Proton type");
+        return new WineInfo(type, version, arch, path);
+    }
+
+    /**
+     * Attempts to find a Wine/Proton profile using multiple lookup strategies.
+     * Tries various identifier formats to handle different naming conventions.
+     */
+    private static ContentProfile findWineProfile(ContentsManager contentsManager, String identifier) {
+        ContentProfile profile;
+
+        // Try: identifier-0 (with version code 0)
+        profile = contentsManager.getProfileByEntryName(identifier + "-0");
+        if (profile != null) {
+            return profile;
+        }
+
+        // Try: identifier as-is
+        profile = contentsManager.getProfileByEntryName(identifier);
+        if (profile != null) {
+            return profile;
+        }
+
+        // Try: capitalized identifier with version codes 0-10
+        if (identifier.startsWith("proton-") || identifier.startsWith("wine-")) {
+            String capitalizedIdentifier = Character.toUpperCase(identifier.charAt(0)) + identifier.substring(1);
+            for (int verCode = 0; verCode <= 10; verCode++) {
+                profile = contentsManager.getProfileByEntryName(capitalizedIdentifier + "-" + verCode);
+                if (profile != null) {
+                    return profile;
+                }
+            }
+        }
+
+        // Try: dots replaced with dashes
+        if (identifier.contains(".")) {
+            String identifierWithDashes = identifier.replace('.', '-');
+            profile = contentsManager.getProfileByEntryName(identifierWithDashes + "-0");
+            if (profile != null) {
+                return profile;
             }
 
-            return new WineInfo(matcher.group(1), matcher.group(2), matcher.group(4), path);
-        } else {
-            return new WineInfo(MAIN_WINE_VERSION.type, MAIN_WINE_VERSION.version, MAIN_WINE_VERSION.arch, null);
+            profile = contentsManager.getProfileByEntryName(identifierWithDashes);
+            if (profile != null) {
+                return profile;
+            }
         }
+
+        return null;
     }
 
     public static boolean isMainWineVersion(String wineVersion) {

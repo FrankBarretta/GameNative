@@ -169,8 +169,6 @@ public class ContentsManager {
             ret = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, context, uri, file);
         }
         if (!ret) {
-            long elapsed = System.currentTimeMillis() - startTime;
-            Log.e("ContentsManager", "Extraction failed after " + elapsed + "ms");
             callback.onFailed(InstallFailedReason.ERROR_BADTAR, null);
             return;
         }
