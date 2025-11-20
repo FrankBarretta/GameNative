@@ -108,7 +108,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
 
         scope.launch {
             isBusy = true
-            statusMessage = "Extracting and validating package (this may take 2-3 minutes for large files)..."
+            statusMessage = ctx.getString(R.string.wine_proton_extracting)
 
             // Get filename and detect type
             val filename = ctx.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
@@ -128,7 +128,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
             android.util.Log.d("WineProtonManager", "Detected type: $detectedType")
 
             if (detectedType == null) {
-                statusMessage = "Filename must begin with 'wine' or 'proton' (case-insensitive)"
+                statusMessage = ctx.getString(R.string.wine_proton_filename_error)
                 Toast.makeText(ctx, statusMessage, Toast.LENGTH_LONG).show()
                 isBusy = false
                 SteamService.isImporting = false
@@ -144,12 +144,12 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                     // Validate file exists and is readable
                     ctx.contentResolver.openInputStream(uri)?.use { stream ->
                         if (stream.available() == 0) {
-                            err = Exception("File is empty or cannot be read")
+                            err = Exception(ctx.getString(R.string.wine_proton_file_empty))
                             latch.countDown()
                             return@withContext Triple(profile, failReason, err)
                         }
                     } ?: run {
-                        err = Exception("Cannot open file")
+                        err = Exception(ctx.getString(R.string.wine_proton_cannot_open))
                         latch.countDown()
                         return@withContext Triple(profile, failReason, err)
                     }
@@ -187,15 +187,15 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
             val (profile, fail, error) = result
             if (profile == null) {
                 val msg = when (fail) {
-                    ContentsManager.InstallFailedReason.ERROR_BADTAR -> "File cannot be recognized as valid archive"
-                    ContentsManager.InstallFailedReason.ERROR_NOPROFILE -> "profile.json not found in package"
-                    ContentsManager.InstallFailedReason.ERROR_BADPROFILE -> "profile.json is invalid"
-                    ContentsManager.InstallFailedReason.ERROR_EXIST -> "This Wine/Proton version already exists"
-                    ContentsManager.InstallFailedReason.ERROR_MISSINGFILES -> "Package is missing required files (bin/, lib/, or prefixPack.txz)"
-                    ContentsManager.InstallFailedReason.ERROR_UNTRUSTPROFILE -> "Package cannot be trusted"
-                    ContentsManager.InstallFailedReason.ERROR_NOSPACE -> "Not enough storage space"
-                    null -> error?.let { "Error: ${it.javaClass.simpleName} - ${it.message}" } ?: "Unknown error occurred"
-                    else -> "Unable to install Wine/Proton package"
+                    ContentsManager.InstallFailedReason.ERROR_BADTAR -> ctx.getString(R.string.wine_proton_error_badtar)
+                    ContentsManager.InstallFailedReason.ERROR_NOPROFILE -> ctx.getString(R.string.wine_proton_error_noprofile)
+                    ContentsManager.InstallFailedReason.ERROR_BADPROFILE -> ctx.getString(R.string.wine_proton_error_badprofile)
+                    ContentsManager.InstallFailedReason.ERROR_EXIST -> ctx.getString(R.string.wine_proton_error_exist)
+                    ContentsManager.InstallFailedReason.ERROR_MISSINGFILES -> ctx.getString(R.string.wine_proton_error_missingfiles)
+                    ContentsManager.InstallFailedReason.ERROR_UNTRUSTPROFILE -> ctx.getString(R.string.wine_proton_error_untrustprofile)
+                    ContentsManager.InstallFailedReason.ERROR_NOSPACE -> ctx.getString(R.string.wine_proton_error_nospace)
+                    null -> error?.let { "Error: ${it.javaClass.simpleName} - ${it.message}" } ?: ctx.getString(R.string.wine_proton_error_unknown)
+                    else -> ctx.getString(R.string.wine_proton_error_unable_install)
                 }
                 statusMessage = if (error != null && fail != null) {
                     "$msg: ${error.message ?: error.javaClass.simpleName}"
@@ -212,7 +212,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
             // Validate it's Wine or Proton and matches detected type
             if (profile.type != ContentProfile.ContentType.CONTENT_TYPE_WINE &&
                 profile.type != ContentProfile.ContentType.CONTENT_TYPE_PROTON) {
-                statusMessage = "Package is not Wine or Proton (type: ${profile.type})"
+                statusMessage = ctx.getString(R.string.wine_proton_not_wine_or_proton, profile.type)
                 Toast.makeText(ctx, statusMessage, Toast.LENGTH_LONG).show()
                 isBusy = false
                 SteamService.isImporting = false
@@ -221,7 +221,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
 
             // Verify detected type matches package type
             if (profile.type != detectedType) {
-                statusMessage = "Filename indicates $detectedType but package contains ${profile.type}"
+                statusMessage = ctx.getString(R.string.wine_proton_type_mismatch, detectedType, profile.type)
                 Toast.makeText(ctx, statusMessage, Toast.LENGTH_LONG).show()
                 isBusy = false
                 SteamService.isImporting = false
@@ -235,7 +235,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
             untrustedFiles.addAll(files)
             if (untrustedFiles.isNotEmpty()) {
                 showUntrustedConfirm = true
-                statusMessage = "This package includes files outside the trusted set."
+                statusMessage = ctx.getString(R.string.wine_proton_untrusted_files_detected)
                 isBusy = false
             } else {
                 // Safe to finish install directly
@@ -252,7 +252,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = "Wine/Proton Manager", style = MaterialTheme.typography.titleLarge) },
+        title = { Text(text = stringResource(R.string.wine_proton_manager), style = MaterialTheme.typography.titleLarge) },
         text = {
             Column(
                 modifier = Modifier
@@ -281,15 +281,12 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                         )
                         Column {
                             Text(
-                                text = "BIONIC ONLY",
+                                text = stringResource(R.string.wine_proton_bionic_only),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "Import custom Wine or Proton versions for Bionic containers. " +
-                                       "Filename must begin with 'wine' or 'proton' (case-insensitive). " +
-                                       "Packages must include bin/, lib/, and prefixPack.txz. " +
-                                       "All imports are bionic-compatible only.",
+                                text = stringResource(R.string.wine_proton_info_description),
                                 style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
@@ -298,13 +295,13 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                 }
 
                 Text(
-                    text = "Import Wine/Proton Package",
+                    text = stringResource(R.string.wine_proton_import_package),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
                 Text(
-                    text = "Select a .wcp file (tar.xz or tar.zst archive) with filename starting with 'wine' or 'proton'",
+                    text = stringResource(R.string.wine_proton_select_file_description),
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
@@ -317,12 +314,12 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                             importLauncher.launch(arrayOf("application/octet-stream", "*/*"))
                         } catch (e: Exception) {
                             SteamService.isImporting = false
-                            Toast.makeText(ctx, "Failed to open file picker: ${e.message}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(ctx, ctx.getString(R.string.wine_proton_failed_file_picker, e.message ?: ""), Toast.LENGTH_SHORT).show()
                         }
                     },
                     enabled = !isBusy,
                     modifier = Modifier.padding(bottom = 12.dp)
-                ) { Text("Import .wcp Package") }
+                ) { Text(stringResource(R.string.wine_proton_import_wcp_button)) }
 
                 if (isBusy) {
                     Row(
@@ -330,7 +327,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                         modifier = Modifier.padding(bottom = 8.dp)
                     ) {
                         CircularProgressIndicator(modifier = Modifier.height(20.dp), strokeWidth = 2.dp)
-                        Text(text = statusMessage ?: "Processing...")
+                        Text(text = statusMessage ?: stringResource(R.string.wine_proton_processing))
                     }
                 } else if (!statusMessage.isNullOrEmpty()) {
                     Text(
@@ -342,29 +339,29 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
 
                 pendingProfile?.let { profile ->
                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                    Text(text = "Package Details", style = MaterialTheme.typography.titleMedium)
+                    Text(text = stringResource(R.string.wine_proton_package_details), style = MaterialTheme.typography.titleMedium)
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 8.dp)
                     ) {
-                        InfoRow(label = "Type", value = profile.type.toString())
-                        InfoRow(label = "Version", value = profile.verName)
-                        InfoRow(label = "Version Code", value = profile.verCode.toString())
+                        InfoRow(label = stringResource(R.string.wine_proton_type), value = profile.type.toString())
+                        InfoRow(label = stringResource(R.string.wine_proton_version), value = profile.verName)
+                        InfoRow(label = stringResource(R.string.wine_proton_version_code), value = profile.verCode.toString())
                         profile.wineBinPath?.let { binPath ->
-                            InfoRow(label = "Bin Path", value = binPath)
+                            InfoRow(label = stringResource(R.string.wine_proton_bin_path), value = binPath)
                         }
                         profile.wineLibPath?.let { libPath ->
-                            InfoRow(label = "Lib Path", value = libPath)
+                            InfoRow(label = stringResource(R.string.wine_proton_lib_path), value = libPath)
                         }
                         if (!profile.desc.isNullOrEmpty()) {
-                            InfoRow(label = "Description", value = profile.desc)
+                            InfoRow(label = stringResource(R.string.wine_proton_description), value = profile.desc)
                         }
                     }
 
                     if (untrustedFiles.isEmpty()) {
                         Text(
-                            text = "✓ All files are trusted. Ready to install.",
+                            text = stringResource(R.string.wine_proton_all_files_trusted),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(top = 8.dp)
@@ -381,17 +378,17 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                             },
                             enabled = !isBusy,
                             modifier = Modifier.padding(top = 8.dp)
-                        ) { Text("Install Package") }
+                        ) { Text(stringResource(R.string.wine_proton_install_package)) }
                     }
                 }
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                Text(text = "Installed Wine/Proton Versions", style = MaterialTheme.typography.titleMedium)
+                Text(text = stringResource(R.string.wine_proton_installed_versions), style = MaterialTheme.typography.titleMedium)
 
                 // Installed list
                 if (installedProfiles.isEmpty()) {
                     Text(
-                        text = "No installed Wine or Proton versions found.",
+                        text = stringResource(R.string.wine_proton_no_versions_found),
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 8.dp)
                     )
@@ -419,7 +416,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.Delete,
-                                        contentDescription = "Delete",
+                                        contentDescription = stringResource(R.string.wine_proton_delete_content_desc),
                                         tint = MaterialTheme.colorScheme.error
                                     )
                                 }
@@ -442,16 +439,16 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
     if (showUntrustedConfirm && pendingProfile != null) {
         AlertDialog(
             onDismissRequest = { showUntrustedConfirm = false },
-            title = { Text("Untrusted Files Detected") },
+            title = { Text(stringResource(R.string.untrusted_files_detected)) },
             text = {
                 Column(modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
                     Text(
-                        text = "This package includes files outside the trusted set. Review and confirm to proceed with installation.",
+                        text = stringResource(R.string.wine_proton_untrusted_files_message),
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
                     Text(
-                        text = "Untrusted files:",
+                        text = stringResource(R.string.wine_proton_untrusted_files_label),
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
@@ -473,7 +470,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                             isBusy = false
                         }
                     }
-                }) { Text("Install Anyway") }
+                }) { Text(stringResource(R.string.install_anyway)) }
             },
             dismissButton = {
                 TextButton(onClick = {
@@ -489,10 +486,9 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
     deleteTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text("Remove Wine/Proton Version") },
+            title = { Text(stringResource(R.string.wine_proton_remove_title)) },
             text = {
-                Text("Are you sure you want to remove ${target.type} ${target.verName} (${target.verCode})? " +
-                     "Containers using this version will no longer work.")
+                Text(stringResource(R.string.wine_proton_remove_message, target.type, target.verName, target.verCode))
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -506,11 +502,11 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                             // Refresh on main thread
                             withContext(Dispatchers.Main) {
                                 refreshInstalled()
-                                Toast.makeText(ctx, "Removed ${target.verName}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(ctx, ctx.getString(R.string.wine_proton_removed_toast, target.verName), Toast.LENGTH_SHORT).show()
                             }
                         } catch (e: Exception) {
                             android.util.Log.e("WineProtonManager", "Delete failed", e)
-                            Toast.makeText(ctx, "Failed to remove: ${e.message}", Toast.LENGTH_LONG).show()
+                            Toast.makeText(ctx, ctx.getString(R.string.wine_proton_remove_failed, e.message ?: ""), Toast.LENGTH_LONG).show()
                         }
                         deleteTarget = null
                     }
@@ -549,20 +545,20 @@ private suspend fun performFinishInstall(
             mgr.finishInstallContent(profile, object : ContentsManager.OnInstallFinishedCallback {
                 override fun onFailed(reason: ContentsManager.InstallFailedReason, e: Exception) {
                     message = when (reason) {
-                        ContentsManager.InstallFailedReason.ERROR_EXIST -> "Wine/Proton version already exists"
-                        ContentsManager.InstallFailedReason.ERROR_NOSPACE -> "Not enough storage space"
-                        else -> "Failed to install: ${e.message ?: "Unknown error"}"
+                        ContentsManager.InstallFailedReason.ERROR_EXIST -> context.getString(R.string.wine_proton_version_already_exists)
+                        ContentsManager.InstallFailedReason.ERROR_NOSPACE -> context.getString(R.string.wine_proton_error_nospace)
+                        else -> context.getString(R.string.wine_proton_install_failed, e.message ?: context.getString(R.string.wine_proton_error_unknown))
                     }
                     latch.countDown()
                 }
 
                 override fun onSucceed(profileArg: ContentProfile) {
-                    message = "${profileArg.type} ${profileArg.verName} installed successfully"
+                    message = context.getString(R.string.wine_proton_install_success, profileArg.type, profileArg.verName)
                     latch.countDown()
                 }
             })
         } catch (e: Exception) {
-            message = "Installation error: ${e.message}"
+            message = context.getString(R.string.wine_proton_install_error, e.message ?: "")
             latch.countDown()
         }
         latch.await()
@@ -570,4 +566,12 @@ private suspend fun performFinishInstall(
     }
     onDone(msg)
     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+}
+
+@androidx.compose.ui.tooling.preview.Preview
+@Composable
+private fun WineProtonManagerDialogPreview() {
+    MaterialTheme {
+        WineProtonManagerDialog(open = true, onDismiss = {})
+    }
 }
