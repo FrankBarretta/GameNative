@@ -116,13 +116,13 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
         }
     }
 
-    // Cleanup on dialog dismiss - only reset if not actually busy importing
+    // Cleanup on dialog dismiss
     androidx.compose.runtime.DisposableEffect(Unit) {
         onDispose {
-            // Only reset importing flag if we're not in the middle of an actual import
-            if (!isBusy) {
-                SteamService.isImporting = false
-            }
+            // Always reset importing flag when dialog closes
+            // If there's an actual import in progress, it will complete in the background
+            android.util.Log.d("WineProtonManager", "Dialog closing, resetting isImporting flag (was busy: $isBusy)")
+            SteamService.isImporting = false
         }
     }
 
