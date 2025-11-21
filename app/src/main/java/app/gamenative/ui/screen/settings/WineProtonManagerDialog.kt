@@ -83,21 +83,21 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
     val refreshInstalled: () -> Unit = {
         installedProfiles.clear()
         try {
-            // Use a set to track unique profiles by verName to avoid duplicates
-            val seenVersions = mutableSetOf<String>()
+            // Use a set to track unique profiles by type+verName to avoid duplicates
+            val seenProfiles = mutableSetOf<Pair<ContentProfile.ContentType, String>>()
             // Get both Wine and Proton profiles
             val wineList = mgr.getProfiles(ContentProfile.ContentType.CONTENT_TYPE_WINE)
             val protonList = mgr.getProfiles(ContentProfile.ContentType.CONTENT_TYPE_PROTON)
             android.util.Log.d("WineProtonManager", "Wine profiles from manager: ${wineList?.size ?: 0}, Proton profiles: ${protonList?.size ?: 0}")
 
             if (wineList != null) {
-                val filtered = wineList.filter { it.remoteUrl == null && seenVersions.add(it.verName) }
+                val filtered = wineList.filter { it.remoteUrl == null && seenProfiles.add(Pair(it.type, it.verName)) }
                 android.util.Log.d("WineProtonManager", "Adding ${filtered.size} Wine profiles:")
                 filtered.forEach { android.util.Log.d("WineProtonManager", "  - ${it.type}: ${it.verName}") }
                 installedProfiles.addAll(filtered)
             }
             if (protonList != null) {
-                val filtered = protonList.filter { it.remoteUrl == null && seenVersions.add(it.verName) }
+                val filtered = protonList.filter { it.remoteUrl == null && seenProfiles.add(Pair(it.type, it.verName)) }
                 android.util.Log.d("WineProtonManager", "Adding ${filtered.size} Proton profiles:")
                 filtered.forEach { android.util.Log.d("WineProtonManager", "  - ${it.type}: ${it.verName}") }
                 installedProfiles.addAll(filtered)
