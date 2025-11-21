@@ -97,12 +97,6 @@ fun HomeLibraryScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    // Ensure default CustomGames folder exists when the library screen loads
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            CustomGameScanner.ensureDefaultFolderExists()
-        }
-    }
 
     LibraryScreenContent(
         state = state,

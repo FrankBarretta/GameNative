@@ -86,7 +86,7 @@
     <string name="custom_game_exe_selection_message">This game has multiple executables. Please open Custom Game Settings to select which one to launch.</string>
     <string name="custom_game_settings">Custom Game Settings</string>
     <string name="custom_game_delete_title">Delete Game</string>
-    <string name="custom_game_delete_message">You can remove this game\'s path from the app settings page.</string>
+    <string name="custom_game_delete_message">Are you sure you want to uninstall %1$s?</string>
     <string name="custom_game_unknown_developer">Unknown</string>
 
     <!--Winlator-->
