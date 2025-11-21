@@ -266,11 +266,13 @@ class CustomGameAppScreen : BaseAppScreen() {
 
                 Timber.tag("CustomGameAppScreen").d("Icon check - existingIconPath: ${existingIconPath ?: "null"}, hasExtractedIcon: $hasExtractedIcon")
 
-                // Also check if there's an extracted icon file anywhere in the folder (recursive search)
-                fun findExtractedIconRecursive(dir: File): File? {
+                // Also check if there's an extracted icon file anywhere in the folder (limited depth search)
+                // Limit search to 2 levels deep to avoid performance issues with large game folders
+                fun findExtractedIconLimited(dir: File, depth: Int = 0, maxDepth: Int = 2): File? {
+                    if (depth > maxDepth) return null
                     dir.listFiles()?.forEach { file ->
                         if (file.isDirectory) {
-                            val found = findExtractedIconRecursive(file)
+                            val found = findExtractedIconLimited(file, depth + 1, maxDepth)
                             if (found != null) return found
                         } else if (file.name.endsWith(".extracted.ico", ignoreCase = true)) {
                             return file
@@ -278,7 +280,7 @@ class CustomGameAppScreen : BaseAppScreen() {
                     }
                     return null
                 }
-                val extractedIconFile = findExtractedIconRecursive(gameFolder)
+                val extractedIconFile = findExtractedIconLimited(gameFolder)
                 Timber.tag("CustomGameAppScreen").d("Recursive search found extracted icon: ${extractedIconFile?.absolutePath ?: "null"}")
 
                 // If findIconFileForCustomGame didn't find an extracted icon, but one exists, we should still try to extract

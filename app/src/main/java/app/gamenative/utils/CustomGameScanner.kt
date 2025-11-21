@@ -410,66 +410,7 @@ object CustomGameScanner {
     }
 
     /**
-     * Returns the set of root paths from preferences.
-     * The default path is pre-added to preferences but can be removed by the user.
-     */
-    fun getAllRoots(): Set<String> {
-        // Return paths from preferences, which includes the default path
-        // (unless the user has removed it)
-        return PrefManager.customGamePaths
-    }
-
-    /**
-     * Count folders per root path (immediate subdirectories).
-     * Note: This is used by Settings to quickly indicate how many entries are present
-     * under each Custom Game path. It intentionally does NOT validate that the
-     * folders contain executables. Library visibility still requires an .exe via
-     * scanAsLibraryItems().
-     */
-    fun countGamesByRoot(query: String = ""): Map<String, Int> {
-        val q = query.trim()
-        val result = mutableMapOf<String, Int>()
-        val roots = getAllRoots()
-
-        // Handle empty roots gracefully
-        if (roots.isEmpty()) {
-            return result
-        }
-
-        for (root in roots) {
-            val rootFile = File(root)
-            if (!rootFile.exists() || !rootFile.isDirectory) {
-                result[root] = 0
-                continue
-            }
-
-            val children = try {
-                rootFile.listFiles { f -> f.isDirectory }
-            } catch (e: SecurityException) {
-                Timber.tag("CustomGameScanner").w("Permission denied counting games in root: $root - ${e.message}")
-                result[root] = -1 // Use -1 to indicate permission error
-                continue
-            } catch (e: Exception) {
-                Timber.tag("CustomGameScanner").w("Error counting games in root: $root - ${e.message}")
-                result[root] = 0
-                continue
-            }
-
-            if (children == null) {
-                result[root] = -1 // Use -1 to indicate permission error
-                continue
-            }
-
-            val count = children.count { folder ->
-                (q.isEmpty() || folder.name.contains(q, ignoreCase = true))
-            }
-            result[root] = count
-        }
-        return result
-    }
-
-    /**
-     * Scan all roots for subfolders that look like custom games.
+     * Scan manual folders for custom games.
      * A folder qualifies if it contains at least one .exe file (case-insensitive)
      * at depth <= 2 (folder itself or one level below).
      * Optionally filter by [query] contained in folder name (case-insensitive).
@@ -619,11 +560,10 @@ object CustomGameScanner {
 
     /**
      * Gets or rebuilds the appId cache if needed.
-     * Cache is invalidated when Custom Game root paths change.
+     * Cache is invalidated when Custom Game manual folders change.
      */
     private fun getOrRebuildCache(): Map<Int, String> {
         return CustomGameCache.getOrRebuildCache(
-            getAllRoots = { getAllRoots() },
             getManualFolders = { PrefManager.customGameManualFolders },
             looksLikeGameFolder = { folder -> looksLikeGameFolder(folder) },
             readGameIdFromFile = { folder -> readGameIdFromFile(folder) }
