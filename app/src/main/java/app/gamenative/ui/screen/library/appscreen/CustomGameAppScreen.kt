@@ -10,6 +10,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.res.stringResource
+import app.gamenative.PrefManager
 import app.gamenative.R
 import app.gamenative.data.LibraryItem
 import app.gamenative.events.AndroidEvent
@@ -204,6 +205,12 @@ class CustomGameAppScreen : BaseAppScreen() {
         libraryItem: LibraryItem,
         onClickPlay: (Boolean) -> Unit
     ) {
+        val container = ContainerUtils.getOrCreateContainer(context, libraryItem.appId)
+        if (container.executablePath.isEmpty()) {
+            // Multiple exes found but none selected - show dialog
+            showExeSelectionDialog(libraryItem.appId)
+            return
+        }
         // Launch the game - executable check is now done in preLaunchApp
         PluviaApp.events.emit(AndroidEvent.ExternalGameLaunch(libraryItem.appId))
     }
@@ -259,11 +266,13 @@ class CustomGameAppScreen : BaseAppScreen() {
 
                 Timber.tag("CustomGameAppScreen").d("Icon check - existingIconPath: ${existingIconPath ?: "null"}, hasExtractedIcon: $hasExtractedIcon")
 
-                // Also check if there's an extracted icon file anywhere in the folder (recursive search)
-                fun findExtractedIconRecursive(dir: File): File? {
+                // Also check if there's an extracted icon file anywhere in the folder (limited depth search)
+                // Limit search to 2 levels deep to avoid performance issues with large game folders
+                fun findExtractedIconLimited(dir: File, depth: Int = 0, maxDepth: Int = 2): File? {
+                    if (depth > maxDepth) return null
                     dir.listFiles()?.forEach { file ->
                         if (file.isDirectory) {
-                            val found = findExtractedIconRecursive(file)
+                            val found = findExtractedIconLimited(file, depth + 1, maxDepth)
                             if (found != null) return found
                         } else if (file.name.endsWith(".extracted.ico", ignoreCase = true)) {
                             return file
@@ -271,7 +280,7 @@ class CustomGameAppScreen : BaseAppScreen() {
                     }
                     return null
                 }
-                val extractedIconFile = findExtractedIconRecursive(gameFolder)
+                val extractedIconFile = findExtractedIconLimited(gameFolder)
                 Timber.tag("CustomGameAppScreen").d("Recursive search found extracted icon: ${extractedIconFile?.absolutePath ?: "null"}")
 
                 // If findIconFileForCustomGame didn't find an extracted icon, but one exists, we should still try to extract
@@ -444,15 +453,67 @@ class CustomGameAppScreen : BaseAppScreen() {
                 },
                 title = { Text(stringResource(R.string.custom_game_delete_title)) },
                 text = {
-                    Text(text = stringResource(R.string.custom_game_delete_message))
+                    Text(text = stringResource(R.string.custom_game_delete_message, libraryItem.name))
                 },
                 confirmButton = {
+                    TextButton(
+                        onClick = {
+                            hideDeleteDialog(libraryItem.appId)
+
+                            // Delete the game folder and container
+                            scope.launch {
+                                try {
+                                    // Delete the container first (needs to be on main thread)
+                                    withContext(Dispatchers.Main) {
+                                        ContainerUtils.deleteContainer(context, libraryItem.appId)
+                                    }
+
+                                    // Remove from manual folders list and invalidate cache
+                                    withContext(Dispatchers.IO) {
+                                        val folderPath = CustomGameScanner.getFolderPathFromAppId(libraryItem.appId)
+                                        if (folderPath != null) {
+                                            val manualFolders = PrefManager.customGameManualFolders.toMutableSet()
+                                            manualFolders.remove(folderPath)
+                                            PrefManager.customGameManualFolders = manualFolders
+                                        }
+                                        CustomGameScanner.invalidateCache()
+                                    }
+
+                                    // Navigate back and show notification
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(
+                                            context,
+                                            "\"${libraryItem.name}\" has been deleted",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+
+                                        // Small delay to ensure file system updates are complete
+                                        // before navigating back (list will auto-refresh when displayed)
+                                        delay(100)
+
+                                        // Navigate back to game list
+                                        onBack()
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(
+                                            context,
+                                            "Failed to delete game: ${e.message}",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                }
+                            }
+                        }
+                    ) {
+                        Text("Delete", color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+                    }
                 },
                 dismissButton = {
                     TextButton(onClick = {
                         hideDeleteDialog(libraryItem.appId)
                     }) {
-                        Text(stringResource(R.string.close))
+                        Text("Cancel")
                     }
                 }
             )

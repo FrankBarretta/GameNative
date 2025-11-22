@@ -43,7 +43,6 @@ import app.gamenative.service.DownloadService
 import app.gamenative.service.SteamService
 import app.gamenative.ui.theme.PluviaTheme
 import app.gamenative.ui.component.topbar.AccountButton
-import app.gamenative.utils.CustomGameScanner
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -97,7 +96,7 @@ private fun calculateInstalledCount(state: LibraryState): Int {
 
     // Count Custom Games (always considered "installed")
     val customGameCount = if (state.showCustomGamesInLibrary) {
-        CustomGameScanner.scanAsLibraryItems(query = "").count()
+        PrefManager.customGamesCount
     } else {
         0
     }
