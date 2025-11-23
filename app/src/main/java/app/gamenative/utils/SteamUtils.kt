@@ -913,7 +913,7 @@ object SteamUtils {
                     res.use {
                         val body = it.body?.string()
                             ?: throw IllegalStateException("Response body is null")
-                        Timber.i("[DX Fetch] Raw fbody etchDirect3DMajor for body=%s", body)
+                        Timber.i("[DX Fetch] Raw fbody fetchDirect3DMajor for body=%s", body)
 
                         val jsonObject = JSONObject(body)
 
