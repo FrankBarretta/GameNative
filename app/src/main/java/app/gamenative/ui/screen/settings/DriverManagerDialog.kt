@@ -38,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.LaunchedEffect
 import app.gamenative.R
+import app.gamenative.utils.formatBytes
 import app.gamenative.utils.Net
 import app.gamenative.ui.theme.settingsTileColors
 import com.alorma.compose.settings.ui.SettingsGroup
@@ -524,16 +525,6 @@ private fun handlePickedUri(context: Context, uri: Uri): String {
     } catch (e: Exception) {
         "Error importing driver: ${e.message}"
     }
-}
-
-private fun formatBytes(bytes: Long): String {
-    if (bytes < 1024) return "${bytes} B"
-    val kb = bytes / 1024.0
-    if (kb < 1024) return String.format("%.1f KB", kb)
-    val mb = kb / 1024.0
-    if (mb < 1024) return String.format("%.1f MB", mb)
-    val gb = mb / 1024.0
-    return String.format("%.2f GB", gb)
 }
 
 @Preview(uiMode = Configuration.UI_MODE_NIGHT_YES or Configuration.UI_MODE_TYPE_NORMAL)

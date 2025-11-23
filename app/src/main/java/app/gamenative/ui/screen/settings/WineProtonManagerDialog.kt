@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.gamenative.R
 import app.gamenative.service.SteamService
+import app.gamenative.utils.formatBytes
 import app.gamenative.utils.Net
 import com.winlator.container.ContainerManager
 import com.winlator.contents.ContentProfile
@@ -67,6 +68,7 @@ import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -134,6 +136,8 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
 
     LaunchedEffect(open) {
         if (open) {
+            manifestError = null
+            isLoadingManifest = true
             try {
                 withContext(Dispatchers.IO) { mgr.syncContents() }
             } catch (_: Exception) {}
@@ -163,6 +167,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                         withContext(Dispatchers.Main) {
                             wineProtonManifest = manifest
                             isLoadingManifest = false
+                            manifestError = null
                         }
                         Timber.d("WineProtonManagerDialog: Manifest loaded with ${manifest.size} Wine/Proton entries")
                     } else {
@@ -1117,16 +1122,6 @@ private fun detectBinaryVariant(installDir: File): String {
         android.util.Log.e("WineProtonManager", "Error detecting binary variant", e)
         return "unknown"
     }
-}
-
-private fun formatBytes(bytes: Long): String {
-    if (bytes < 1024) return "${bytes} B"
-    val kb = bytes / 1024.0
-    if (kb < 1024) return String.format("%.1f KB", kb)
-    val mb = kb / 1024.0
-    if (mb < 1024) return String.format("%.1f MB", mb)
-    val gb = mb / 1024.0
-    return String.format("%.2f GB", gb)
 }
 
 @androidx.compose.ui.tooling.preview.Preview
