@@ -142,14 +142,9 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
             // Fetch the Wine/Proton manifest
             Timber.d("WineProtonManagerDialog: Fetching Wine/Proton manifest...")
             scope.launch(Dispatchers.IO) {
-                /* Mock For Testing */
-                // isLoadingManifest = true
-                // wineProtonManifest = mapOf("Proton-10.0-ARM64ec" to "proton10-0-arm64ec", "Wine-9.21" to "wine-9-21");
-                // isLoadingManifest = false
-
 
                 try {
-                    val manifestUrl = "https://raw.githubusercontent.com/utkarshdalal/gamenative-landing-page/refs/heads/main/data/wine-proton/manifest.json"
+                    val manifestUrl = "https://downloads.gamenative.app/component-manifest.json"
                     val request = Request.Builder()
                         .url(manifestUrl)
                         .build()
@@ -163,7 +158,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                         val manifest = jsonObject.entries
                             .filter { it.key.startsWith("wine", ignoreCase = true) ||
                                      it.key.startsWith("proton", ignoreCase = true) }
-                            .associate { it.key to it.value.toString().trim("\"") }
+                            .associate { it.key to it.value.toString().removeSurrounding("\"") }
 
                         withContext(Dispatchers.Main) {
                             wineProtonManifest = manifest
@@ -393,7 +388,7 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
 
                 // Use shared downloader with automatic domain fallback
                 SteamService.fetchFileWithFallback(
-                    fileName = "wine/$wineFileName",
+                    fileName = "$wineFileName",
                     dest = destFile,
                     context = ctx
                 ) { progress ->
