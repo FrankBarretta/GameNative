@@ -210,15 +210,12 @@ public abstract class ImageFsInstaller {
                 // Directory format: {type}-{version}-{code} where type is "wine" or "proton"
                 // Examples: wine-10.0-1, proton-ge-10-25-1, wine-staging-9.0-2
                 if (lowerName.startsWith("wine-") || lowerName.startsWith("proton-")) {
-                    Log.d("ImageFsInstaller", "Preserving Wine/Proton installation: " + fileName);
                     continue;
                 }
                 // Also preserve installed-wine directory (legacy support)
                 if (fileName.equals("installed-wine")) {
-                    Log.d("ImageFsInstaller", "Preserving legacy installed-wine directory");
                     continue;
                 }
-                Log.d("ImageFsInstaller", "Removing from opt: " + fileName);
                 FileUtils.delete(file);
             }
         }
