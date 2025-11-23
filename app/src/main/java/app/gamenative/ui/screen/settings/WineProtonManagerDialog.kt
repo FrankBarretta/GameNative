@@ -140,7 +140,6 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
             refreshInstalled()
 
             // Fetch the Wine/Proton manifest
-            Timber.d("WineProtonManagerDialog: Fetching Wine/Proton manifest...")
             scope.launch(Dispatchers.IO) {
 
                 try {
@@ -248,16 +247,12 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
 
                     mgr.extraContentFile(uri, object : ContentsManager.OnInstallFinishedCallback {
                         override fun onFailed(reason: ContentsManager.InstallFailedReason, e: Exception?) {
-                            val elapsed = (System.currentTimeMillis() - startTime) / 1000.0
-                            Timber.tag("WineProtonManagerDialog").e(e, "Extraction failed after ${elapsed}s: $reason")
                             failReason = reason
                             err = e
                             latch.countDown()
                         }
 
                         override fun onSucceed(profileArg: ContentProfile) {
-                            val elapsed = (System.currentTimeMillis() - startTime) / 1000.0
-                            Timber.tag("WineProtonManagerDialog").d("Extraction succeeded after ${elapsed}s, profile: ${profileArg.verName}")
                             profile = profileArg
                             latch.countDown()
                         }
@@ -267,12 +262,10 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                     err = e
                     latch.countDown()
                 }
-                Timber.tag("WineProtonManagerDialog").d("Waiting for extraction to complete...")
                 // 4 minutes worth of extration time should be plenty of time.
                 if (!latch.await(240, TimeUnit.SECONDS)) {
                     err = Exception("Extraction timed out after 240 seconds")
                 }
-                Timber.tag("WineProtonManagerDialog").d("Extraction wait completed")
                 Triple(profile, failReason, err)
             }
 
@@ -327,7 +320,6 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
             // Note: Files are still in tmp directory at this point, not yet moved to install location
             val tmpDir = ContentsManager.getTmpDir(ctx)
             val binaryVariant = detectBinaryVariant(tmpDir)
-            Timber.tag("WineProtonManagerDialog").d("Detected binary variant: $binaryVariant (checked in tmp dir: ${tmpDir.path})")
 
             if (binaryVariant == "glibc") {
                 // Reject glibc builds - not supported in GameNative
@@ -338,7 +330,6 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                 try {
                     withContext(Dispatchers.IO) {
                         ContentsManager.cleanTmpDir(ctx)
-                        Timber.tag("WineProtonManagerDialog").d("Cleaned tmp dir for incompatible glibc build: ${profile.verName}")
                     }
                 } catch (e: Exception) {
                     Timber.tag("WineProtonManagerDialog").e(e, "Error cleaning tmp dir")
@@ -381,7 +372,6 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
             isDownloading = true
             downloadProgress = 0f
             try {
-                Timber.d("WineProtonManagerDialog: Starting download $wineFileName")
                 val destFile = File(ctx.cacheDir, wineFileName)
                 var lastUpdate = 0L
 
@@ -399,9 +389,6 @@ fun WineProtonManagerDialog(open: Boolean, onDismiss: () -> Unit) {
                     }
                 }
 
-                val downloadDurationMs = System.currentTimeMillis() - overallStart
-                val downloadedSize = destFile.length()
-                Timber.d("WineProtonManagerDialog: Download complete in ${downloadDurationMs}ms (${formatBytes(downloadedSize)})")
                 withContext(Dispatchers.Main) {
                     isDownloading = false
                     downloadProgress = 1f
