@@ -156,19 +156,14 @@ public class WineInfo implements Parcelable {
 
     @NonNull
     public static WineInfo fromIdentifier(Context context, ContentsManager contentsManager, String identifier) {
-        Log.d("WineInfo", "🍷 fromIdentifier called with: '" + identifier + "'");
-
         // Handle main Wine version
         if (identifier.equals(MAIN_WINE_VERSION.identifier())) {
-            Log.d("WineInfo", "   ✅ Matched MAIN_WINE_VERSION");
             return new WineInfo(MAIN_WINE_VERSION.type, MAIN_WINE_VERSION.version, MAIN_WINE_VERSION.arch, null);
         }
 
         // Try to find profile using multiple lookup strategies
         ContentProfile wineProfile = findWineProfile(contentsManager, identifier);
-        if (wineProfile != null) {
-            Log.d("WineInfo", "   ✅ Found profile: type=" + wineProfile.type + ", verName=" + wineProfile.verName + ", verCode=" + wineProfile.verCode);
-        } else {
+        if (wineProfile == null) {
             Log.w("WineInfo", "   ⚠️ No profile found for identifier: '" + identifier + "'");
         }
 
@@ -193,7 +188,6 @@ public class WineInfo implements Parcelable {
             for (String wineVersion : wineVersions) {
                 if (wineVersion.contains(identifier)) {
                     path = imageFs.getRootDir().getPath() + "/opt/" + identifier;
-                    Log.d("WineInfo", "   ✅ Found built-in version at: " + path);
                     break;
                 }
             }
@@ -205,7 +199,6 @@ public class WineInfo implements Parcelable {
         if (wineProfile.type == ContentProfile.ContentType.CONTENT_TYPE_WINE
                 || wineProfile.type == ContentProfile.ContentType.CONTENT_TYPE_PROTON) {
             path = ContentsManager.getInstallDir(context, wineProfile).getPath();
-            Log.d("WineInfo", "   ✅ Using imported profile path: " + path);
             WineInfo wineInfo = new WineInfo(type, version, arch, path);
             wineInfo.libPath = wineProfile.wineLibPath;
             return wineInfo;
@@ -220,33 +213,26 @@ public class WineInfo implements Parcelable {
      * Tries various identifier formats to handle different naming conventions.
      */
     private static ContentProfile findWineProfile(ContentsManager contentsManager, String identifier) {
-        Log.d("WineInfo", "   🔍 findWineProfile searching for: '" + identifier + "'");
         ContentProfile profile;
 
         // Try: identifier-0 (with version code 0)
-        Log.d("WineInfo", "      Trying: '" + identifier + "-0'");
         profile = contentsManager.getProfileByEntryName(identifier + "-0");
         if (profile != null) {
-            Log.d("WineInfo", "      ✅ Found with -0 suffix");
             return profile;
         }
 
         // Try: identifier as-is
-        Log.d("WineInfo", "      Trying: '" + identifier + "' (as-is)");
         profile = contentsManager.getProfileByEntryName(identifier);
         if (profile != null) {
-            Log.d("WineInfo", "      ✅ Found as-is");
             return profile;
         }
 
         // Try: capitalized identifier with version codes 0-10
         if (identifier.startsWith("proton-") || identifier.startsWith("wine-")) {
             String capitalizedIdentifier = Character.toUpperCase(identifier.charAt(0)) + identifier.substring(1);
-            Log.d("WineInfo", "      Trying capitalized: '" + capitalizedIdentifier + "' with verCodes 0-10");
             for (int verCode = 0; verCode <= 10; verCode++) {
                 profile = contentsManager.getProfileByEntryName(capitalizedIdentifier + "-" + verCode);
                 if (profile != null) {
-                    Log.d("WineInfo", "      ✅ Found with capitalized + verCode " + verCode);
                     return profile;
                 }
             }
@@ -255,21 +241,18 @@ public class WineInfo implements Parcelable {
         // Try: dots replaced with dashes
         if (identifier.contains(".")) {
             String identifierWithDashes = identifier.replace('.', '-');
-            Log.d("WineInfo", "      Trying dots→dashes: '" + identifierWithDashes + "'");
             profile = contentsManager.getProfileByEntryName(identifierWithDashes + "-0");
             if (profile != null) {
-                Log.d("WineInfo", "      ✅ Found with dots→dashes + -0");
                 return profile;
             }
 
             profile = contentsManager.getProfileByEntryName(identifierWithDashes);
             if (profile != null) {
-                Log.d("WineInfo", "      ✅ Found with dots→dashes");
                 return profile;
             }
         }
 
-        Log.d("WineInfo", "      ❌ No match found in any strategy");
+        Log.d("WineInfo", "Could not find appropriate wine profile for: " + identifier);
         return null;
     }
 
