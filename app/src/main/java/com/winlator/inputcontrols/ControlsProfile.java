@@ -1,6 +1,7 @@
 package com.winlator.inputcontrols;
 
 import android.content.Context;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 
@@ -66,7 +67,12 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
 
     public ExternalController addController(String id) {
         ExternalController controller = getController(id);
-        if (controller == null) controllers.add(controller = ExternalController.getController(id));
+        if (controller == null) {
+            controller = new ExternalController();
+            controller.setId(id);
+            controller.setName("Physical Controller");
+            controllers.add(controller);
+        }
         controllersLoaded = true;
         return controller;
     }
@@ -82,10 +88,46 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
         return null;
     }
 
+    private int lastLoggedDeviceId = -999; // Track last logged deviceId to avoid spam
+
     public ExternalController getController(int deviceId) {
         if (!controllersLoaded) loadControllers();
-        for (ExternalController controller : controllers) if (controller.getDeviceId() == deviceId) return controller;
+
+        // First try exact device ID match
+        for (ExternalController controller : controllers) {
+            if (controller.getDeviceId() == deviceId) {
+                // Only log once per deviceId to avoid motion event spam
+                if (lastLoggedDeviceId != deviceId) {
+                    Log.d("gncontrol", "Controller matched for deviceId " + deviceId + ": " + controller.getName() + " (" + controller.getControllerBindingCount() + " bindings)");
+                    lastLoggedDeviceId = deviceId;
+                }
+                return controller;
+            }
+        }
+
+        // Fall back to wildcard controller if no exact match
+        for (ExternalController controller : controllers) {
+            if (controller.getId().equals("*")) {
+                // Only log once per deviceId to avoid motion event spam
+                if (lastLoggedDeviceId != deviceId) {
+                    Log.d("gncontrol", "Using wildcard controller for deviceId " + deviceId + ": " + controller.getName() + " (" + controller.getControllerBindingCount() + " bindings)");
+                    lastLoggedDeviceId = deviceId;
+                }
+                return controller;
+            }
+        }
+
+        // Only log failure once per deviceId
+        if (lastLoggedDeviceId != deviceId) {
+            Log.w("gncontrol", "No controller found for deviceId: " + deviceId + " in profile: " + name);
+            lastLoggedDeviceId = deviceId;
+        }
         return null;
+    }
+
+    public ArrayList<ExternalController> getControllers() {
+        if (!controllersLoaded) loadControllers();
+        return new ArrayList<>(controllers);
     }
 
     @NonNull
@@ -105,6 +147,7 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
 
     public void save() {
         File file = getProfileFile(context, id);
+        Log.d("ControlsProfile", "Saving profile: " + name + " (ID: " + id + ") to " + file.getAbsolutePath());
 
         try {
             JSONObject data = new JSONObject();
@@ -134,8 +177,11 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
             if (controllersJSONArray.length() > 0) data.put("controllers", controllersJSONArray);
 
             FileUtils.writeString(file, data.toString());
+            Log.d("ControlsProfile", "Profile saved successfully: " + name + " (controllers: " + controllersJSONArray.length() + ", elements: " + elementsJSONArray.length() + ")");
         }
-        catch (JSONException e) {}
+        catch (JSONException e) {
+            Log.e("ControlsProfile", "Failed to save profile: " + name + " (ID: " + id + ")", e);
+        }
     }
 
     public static File getProfileFile(Context context, int id) {
@@ -165,11 +211,19 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
         controllersLoaded = false;
 
         File file = getProfileFile(context, id);
-        if (!file.isFile()) return controllers;
+        Log.d("ControlsProfile", "Loading controllers for profile: " + name + " (ID: " + id + ") from " + file.getAbsolutePath());
+
+        if (!file.isFile()) {
+            Log.d("ControlsProfile", "Profile file does not exist: " + name);
+            return controllers;
+        }
 
         try {
             JSONObject profileJSONObject = new JSONObject(FileUtils.readString(file));
-            if (!profileJSONObject.has("controllers")) return controllers;
+            if (!profileJSONObject.has("controllers")) {
+                Log.d("ControlsProfile", "No controllers section in profile: " + name);
+                return controllers;
+            }
             JSONArray controllersJSONArray = profileJSONObject.getJSONArray("controllers");
             for (int i = 0; i < controllersJSONArray.length(); i++) {
                 JSONObject controllerJSONObject = controllersJSONArray.getJSONObject(i);
@@ -189,8 +243,10 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
                 controllers.add(controller);
             }
             controllersLoaded = true;
+            Log.d("ControlsProfile", "Loaded " + controllers.size() + " controllers for profile: " + name);
         }
         catch (JSONException e) {
+            Log.e("ControlsProfile", "Failed to load controllers for profile: " + name + " (ID: " + id + ")", e);
             e.printStackTrace();
         }
         return controllers;
@@ -201,8 +257,20 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
         elementsLoaded = false;
         virtualGamepad = false;
 
+        // Check if view has valid dimensions before loading
+        if (inputControlsView.getMaxWidth() == 0 || inputControlsView.getMaxHeight() == 0) {
+            Log.w("ControlsProfile", "Cannot load elements - view has no dimensions yet (width: " +
+                inputControlsView.getWidth() + ", height: " + inputControlsView.getHeight() + ")");
+            return;
+        }
+
         File file = getProfileFile(context, id);
-        if (!file.isFile()) return;
+        Log.d("ControlsProfile", "Loading elements for profile: " + name + " (ID: " + id + ") from " + file.getAbsolutePath());
+
+        if (!file.isFile()) {
+            Log.d("ControlsProfile", "Profile file does not exist: " + name);
+            return;
+        }
 
         try {
             JSONObject profileJSONObject = new JSONObject(FileUtils.readString(file));
@@ -233,8 +301,10 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
                 elements.add(element);
             }
             elementsLoaded = true;
+            Log.d("ControlsProfile", "Loaded " + elements.size() + " elements for profile: " + name + " (virtualGamepad: " + virtualGamepad + ")");
         }
         catch (JSONException e) {
+            Log.e("ControlsProfile", "Failed to load elements for profile: " + name + " (ID: " + id + ")", e);
             e.printStackTrace();
         }
     }

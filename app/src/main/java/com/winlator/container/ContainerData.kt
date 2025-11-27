@@ -69,12 +69,12 @@ data class ContainerData(
     val disableMouseInput: Boolean = false,
     /** Touchscreen mode **/
     val touchscreenMode: Boolean = false,
+    /** Hide on-screen controls when physical controller is connected **/
+    val hideControlsWithController: Boolean = false,
+    /** Start with on-screen controls hidden **/
+    val startWithControlsHidden: Boolean = false,
     /** Preferred game language (Goldberg) **/
     val language: String = "english",
-    /** Emulate keyboard/mouse using controller sticks and button bindings **/
-    val emulateKeyboardMouse: Boolean = false,
-    /** Button->Binding name map (JSON string) for emulation UI persistence **/
-    val controllerEmulationBindings: String = "",
     val forceDlc: Boolean = false,
     val useLegacyDRM: Boolean = false,
     val sharpnessEffect: String = "None",
@@ -125,10 +125,10 @@ data class ContainerData(
                     "dinputMapperType" to state.dinputMapperType,
                     "disableMouseInput" to state.disableMouseInput,
                     "touchscreenMode" to state.touchscreenMode,
+                    "hideControlsWithController" to state.hideControlsWithController,
+                    "startWithControlsHidden" to state.startWithControlsHidden,
                     "useDRI3" to state.useDRI3,
                     "language" to state.language,
-                    "emulateKeyboardMouse" to state.emulateKeyboardMouse,
-                    "controllerEmulationBindings" to state.controllerEmulationBindings,
                     "forceDlc" to state.forceDlc,
                     "useLegacyDRM" to state.useLegacyDRM,
                     "sharpnessEffect" to state.sharpnessEffect,
@@ -178,10 +178,10 @@ data class ContainerData(
                     dinputMapperType = savedMap["dinputMapperType"] as Byte,
                     disableMouseInput = savedMap["disableMouseInput"] as Boolean,
                     touchscreenMode = savedMap["touchscreenMode"] as Boolean,
+                    hideControlsWithController = (savedMap["hideControlsWithController"] as? Boolean) ?: false,
+                    startWithControlsHidden = (savedMap["startWithControlsHidden"] as? Boolean) ?: false,
                     useDRI3 = (savedMap["useDRI3"] as? Boolean) ?: true,
                     language = (savedMap["language"] as? String) ?: "english",
-                    emulateKeyboardMouse = (savedMap["emulateKeyboardMouse"] as? Boolean) ?: false,
-                    controllerEmulationBindings = (savedMap["controllerEmulationBindings"] as? String) ?: "",
                     forceDlc = (savedMap["forceDlc"] as? Boolean) ?: false,
                     useLegacyDRM = (savedMap["useLegacyDRM"] as? Boolean) ?: false,
                     sharpnessEffect = (savedMap["sharpnessEffect"] as? String) ?: "None",
