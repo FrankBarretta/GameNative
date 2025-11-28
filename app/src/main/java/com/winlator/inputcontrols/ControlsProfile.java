@@ -88,40 +88,19 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
         return null;
     }
 
-    private int lastLoggedDeviceId = -999; // Track last logged deviceId to avoid spam
-
     public ExternalController getController(int deviceId) {
         if (!controllersLoaded) loadControllers();
 
         // First try exact device ID match
         for (ExternalController controller : controllers) {
-            if (controller.getDeviceId() == deviceId) {
-                // Only log once per deviceId to avoid motion event spam
-                if (lastLoggedDeviceId != deviceId) {
-                    Log.d("gncontrol", "Controller matched for deviceId " + deviceId + ": " + controller.getName() + " (" + controller.getControllerBindingCount() + " bindings)");
-                    lastLoggedDeviceId = deviceId;
-                }
-                return controller;
-            }
+            if (controller.getDeviceId() == deviceId) return controller;
         }
 
         // Fall back to wildcard controller if no exact match
         for (ExternalController controller : controllers) {
-            if (controller.getId().equals("*")) {
-                // Only log once per deviceId to avoid motion event spam
-                if (lastLoggedDeviceId != deviceId) {
-                    Log.d("gncontrol", "Using wildcard controller for deviceId " + deviceId + ": " + controller.getName() + " (" + controller.getControllerBindingCount() + " bindings)");
-                    lastLoggedDeviceId = deviceId;
-                }
-                return controller;
-            }
+            if (controller.getId().equals("*")) return controller;
         }
 
-        // Only log failure once per deviceId
-        if (lastLoggedDeviceId != deviceId) {
-            Log.w("gncontrol", "No controller found for deviceId: " + deviceId + " in profile: " + name);
-            lastLoggedDeviceId = deviceId;
-        }
         return null;
     }
 

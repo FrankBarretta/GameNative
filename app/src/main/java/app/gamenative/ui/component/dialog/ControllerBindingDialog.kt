@@ -155,7 +155,7 @@ fun ControllerBindingDialog(
                         onClick = onDismiss,
                         modifier = Modifier.size(40.dp)
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
+                        Icon(Icons.Default.Close, null)
                     }
                 }
 
@@ -184,7 +184,7 @@ fun ControllerBindingDialog(
                             ) {
                                 Icon(
                                     Icons.Default.Search,
-                                    contentDescription = "Search",
+                                    contentDescription = null,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -208,7 +208,7 @@ fun ControllerBindingDialog(
                                 leadingIcon = {
                                     Icon(
                                         Icons.Default.Search,
-                                        contentDescription = "Search",
+                                        contentDescription = null,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 },
@@ -441,7 +441,7 @@ fun BindingOption(
             if (isSelected) {
                 Icon(
                     imageVector = Icons.Default.Check,
-                    contentDescription = "Selected",
+                    contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary
                 )
             }

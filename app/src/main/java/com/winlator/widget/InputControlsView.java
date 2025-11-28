@@ -424,24 +424,11 @@ public class InputControlsView extends View {
 
     public boolean onKeyEvent(KeyEvent event) {
         if (profile != null && event.getRepeatCount() == 0) {
-            int deviceId = event.getDeviceId();
-            int keyCode = event.getKeyCode();
-            int action = event.getAction();
-            String actionStr = (action == KeyEvent.ACTION_DOWN) ? "DOWN" : "UP";
-
-            Log.d("gncontrol", "=== Controller Button Event ===");
-            Log.d("gncontrol", "DeviceID: " + deviceId + ", KeyCode: " + keyCode + ", Action: " + actionStr);
-            Log.d("gncontrol", "Current Profile: " + profile.getName() + " (ID: " + profile.id + ")");
-
-            ExternalController controller = profile.getController(deviceId);
+            ExternalController controller = profile.getController(event.getDeviceId());
             if (controller != null) {
-                Log.d("gncontrol", "Controller found: " + controller.getName() + " (ID: " + controller.getId() + ")");
-                Log.d("gncontrol", "Controller has " + controller.getControllerBindingCount() + " bindings");
-
-                ExternalControllerBinding controllerBinding = controller.getControllerBinding(keyCode);
+                ExternalControllerBinding controllerBinding = controller.getControllerBinding(event.getKeyCode());
                 if (controllerBinding != null) {
-                    Log.d("gncontrol", "Binding found: KeyCode " + keyCode + " -> " + controllerBinding.getBinding().name());
-
+                    int action = event.getAction();
                     if (action == KeyEvent.ACTION_DOWN) {
                         handleInputEvent(controllerBinding.getBinding(), true);
                     }
@@ -449,11 +436,7 @@ public class InputControlsView extends View {
                         handleInputEvent(controllerBinding.getBinding(), false);
                     }
                     return true;
-                } else {
-                    Log.w("gncontrol", "No binding found for KeyCode: " + keyCode);
                 }
-            } else {
-                Log.w("gncontrol", "No controller found for DeviceID: " + deviceId);
             }
         }
         return false;

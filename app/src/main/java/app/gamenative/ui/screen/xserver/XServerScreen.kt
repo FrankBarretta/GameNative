@@ -216,6 +216,13 @@ fun XServerScreen(
     var win32AppWorkarounds: Win32AppWorkarounds? by remember { mutableStateOf(null) }
     var physicalControllerHandler: PhysicalControllerHandler? by remember { mutableStateOf(null) }
 
+    // Clean up physical controller handler on disposal
+    DisposableEffect(Unit) {
+        onDispose {
+            physicalControllerHandler = null
+        }
+    }
+
     var isKeyboardVisible = false
     var areControlsVisible by remember { mutableStateOf(false) }
     var isEditMode by remember { mutableStateOf(false) }
@@ -295,7 +302,7 @@ fun XServerScreen(
                             PostHog.capture(event = "edit_controls_in_game")
 
                             // Get or create profile for this container
-                            val manager = InputControlsManager(context)
+                            val manager = PluviaApp.inputControlsManager ?: InputControlsManager(context)
                             val allProfiles = manager.getProfiles(false)
 
                             val profileIdStr = container.getExtra("profileId", "0")
@@ -900,32 +907,34 @@ fun XServerScreen(
 
                     if (profile0 != null && currentProfile != null) {
                         // Wait for view to be laid out before loading elements
-                        PluviaApp.inputControlsView?.post {
-                            // Load Profile 0 elements (with valid dimensions)
-                            profile0.loadElements(PluviaApp.inputControlsView!!)
+                        PluviaApp.inputControlsView?.let { icView ->
+                            icView.post {
+                                // Load Profile 0 elements (with valid dimensions)
+                                profile0.loadElements(icView)
 
-                            // Clear current profile elements and copy from Profile 0
-                            val elementsToRemove = currentProfile.elements.toList()
-                            elementsToRemove.forEach { currentProfile.removeElement(it) }
+                                // Clear current profile elements and copy from Profile 0
+                                val elementsToRemove = currentProfile.elements.toList()
+                                elementsToRemove.forEach { currentProfile.removeElement(it) }
 
-                            profile0.elements.forEach { element ->
-                                val newElement = com.winlator.inputcontrols.ControlElement(PluviaApp.inputControlsView!!)
-                                newElement.setType(element.type)
-                                newElement.setShape(element.shape)
-                                newElement.setX(element.x.toInt())
-                                newElement.setY(element.y.toInt())
-                                newElement.setScale(element.scale)
-                                newElement.setText(element.text)
-                                newElement.setIconId(element.iconId.toInt())
-                                newElement.setToggleSwitch(element.isToggleSwitch)
-                                for (i in 0 until 4) {
-                                    newElement.setBindingAt(i, element.getBindingAt(i))
+                                profile0.elements.forEach { element ->
+                                    val newElement = com.winlator.inputcontrols.ControlElement(icView)
+                                    newElement.setType(element.type)
+                                    newElement.setShape(element.shape)
+                                    newElement.setX(element.x.toInt())
+                                    newElement.setY(element.y.toInt())
+                                    newElement.setScale(element.scale)
+                                    newElement.setText(element.text)
+                                    newElement.setIconId(element.iconId.toInt())
+                                    newElement.setToggleSwitch(element.isToggleSwitch)
+                                    for (i in 0 until 4) {
+                                        newElement.setBindingAt(i, element.getBindingAt(i))
+                                    }
+                                    currentProfile.addElement(newElement)
                                 }
-                                currentProfile.addElement(newElement)
-                            }
 
-                            PluviaApp.inputControlsView?.invalidate()
-                            android.widget.Toast.makeText(context, context.getString(R.string.toast_controls_reset), android.widget.Toast.LENGTH_SHORT).show()
+                                icView.invalidate()
+                                android.widget.Toast.makeText(context, context.getString(R.string.toast_controls_reset), android.widget.Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
                 },
@@ -965,7 +974,7 @@ fun XServerScreen(
     }
 
     // Element Editor Dialog
-    if (showElementEditor && elementToEdit != null) {
+    if (showElementEditor && elementToEdit != null && PluviaApp.inputControlsView != null) {
         app.gamenative.ui.component.dialog.ElementEditorDialog(
             element = elementToEdit!!,
             view = PluviaApp.inputControlsView!!,
@@ -984,7 +993,7 @@ fun XServerScreen(
     if (showPhysicalControllerDialog) {
         // Get profile from container settings, not from InputControlsView
         // (InputControlsView.profile is null when on-screen controls are hidden)
-        val manager = InputControlsManager(context)
+        val manager = PluviaApp.inputControlsManager ?: InputControlsManager(context)
         val profileIdStr = container.getExtra("profileId", "0")
         val profileId = profileIdStr.toIntOrNull() ?: 0
         val profile = if (profileId != 0) {

@@ -236,7 +236,7 @@ internal fun PhysicalControllerConfigSection(
                             }
                             onDismiss()
                         }) {
-                            Icon(Icons.Default.Close, "Cancel")
+                            Icon(Icons.Default.Close, null)
                         }
                     },
                     actions = {
@@ -263,7 +263,7 @@ internal fun PhysicalControllerConfigSection(
 
                             refreshKey++
                         }) {
-                            Icon(Icons.Default.Refresh, "Reset to Default")
+                            Icon(Icons.Default.Refresh, null)
                         }
 
                         // Save button
@@ -295,7 +295,7 @@ internal fun PhysicalControllerConfigSection(
                             }
                             onSave()
                         }) {
-                            Icon(Icons.Default.Save, "Save")
+                            Icon(Icons.Default.Save, null)
                         }
                     }
                 )
@@ -555,7 +555,7 @@ private fun ControllerBindingItem(
     onClick: () -> Unit
 ) {
     val binding = workingBindings[keyCode]
-    val bindingText = binding?.toString() ?: "Not Set"
+    val bindingText = binding?.toString() ?: stringResource(R.string.not_set)
 
     Surface(
         modifier = Modifier

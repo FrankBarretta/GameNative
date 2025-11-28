@@ -196,7 +196,7 @@ fun ElementEditorDialog(
                                 onDismiss()
                             }
                         }) {
-                            Icon(Icons.Default.Close, "Cancel")
+                            Icon(Icons.Default.Close, null)
                         }
                     },
                     actions = {
@@ -206,9 +206,9 @@ fun ElementEditorDialog(
                             // If currentText is empty string, set to null to use binding-based text
                             // Otherwise use the current text value
                             element.setText(if (currentText.isEmpty()) null else currentText)
-                            // Only change type if it's different (setType() calls reset() which clears bindings!)
+                            // Change type without resetting bindings
                             if (element.type != types[currentTypeIndex]) {
-                                element.type = types[currentTypeIndex]
+                                element.setTypeWithoutReset(types[currentTypeIndex])
                             }
 
                             // Save to disk
@@ -223,7 +223,7 @@ fun ElementEditorDialog(
                             // Close dialog
                             onSave()
                         }) {
-                            Icon(Icons.Default.Save, "Save")
+                            Icon(Icons.Default.Save, null)
                         }
                     }
                 )
@@ -265,7 +265,7 @@ fun ElementEditorDialog(
                                 }) {
                                     Icon(
                                         imageVector = Icons.Default.Refresh,
-                                        contentDescription = "Reset to original",
+                                        contentDescription = null,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -285,18 +285,12 @@ fun ElementEditorDialog(
                         onItemSelected = { index ->
                             val newType = types[index]
                             currentTypeIndex = index
-                            element.type = newType
-
-                            // Auto-apply default bindings for the new type
-                            val defaultBindings = getDefaultBindingsForType(newType)
-                            defaultBindings.forEachIndexed { i, binding ->
-                                element.setBindingAt(i, binding)
-                            }
+                            element.setTypeWithoutReset(newType)
 
                             // Mark as having unsaved changes
                             hasUnsavedChanges = true
 
-                            // Force UI refresh to show new bindings
+                            // Force UI refresh
                             bindingsRefreshKey++
                             view.invalidate()
                         }
@@ -520,9 +514,9 @@ fun ElementEditorDialog(
                     // Save and close
                     element.setScale(currentScale)
                     element.setText(if (currentText.isEmpty()) null else currentText)
-                    // Only change type if it's different (setType() calls reset() which clears bindings!)
+                    // Change type without resetting bindings
                     if (element.type != types[currentTypeIndex]) {
-                        element.type = types[currentTypeIndex]
+                        element.setTypeWithoutReset(types[currentTypeIndex])
                     }
                     view.profile?.save()
                     view.invalidate()

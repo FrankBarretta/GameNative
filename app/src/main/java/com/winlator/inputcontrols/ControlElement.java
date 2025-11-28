@@ -124,6 +124,11 @@ public class ControlElement {
         reset();
     }
 
+    public void setTypeWithoutReset(Type type) {
+        this.type = type;
+        boundingBoxNeedsUpdate = true;
+    }
+
     public int getBindingCount() {
         return bindings.length;
     }
