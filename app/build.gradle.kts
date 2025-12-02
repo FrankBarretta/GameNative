@@ -10,6 +10,7 @@ plugins {
     alias(libs.plugins.kotlinter)
     alias(libs.plugins.ksp)
     alias(libs.plugins.secrets.gradle)
+    id("com.chaquo.python") version "16.0.0"
 }
 
 val keystorePropertiesFile = rootProject.file("app/keystores/keystore.properties")
@@ -197,8 +198,27 @@ android {
     // }
 }
 
+chaquopy {
+    defaultConfig {
+        version = "3.11"  // Last Python version supporting armeabi-v7a (32-bit ARM)
+        pip {
+            // Install GOGDL dependencies
+            install("requests")
+        }
+    }
+    sourceSets {
+        getByName("main") {
+            srcDir("src/main/python")
+        }
+    }
+}
+
 dependencies {
     implementation(libs.material)
+    
+    // Chrome Custom Tabs for GOG OAuth
+    implementation("androidx.browser:browser:1.8.0")
+    
     // JavaSteam
     val localBuild = false // Change to 'true' needed when building JavaSteam manually
     if (localBuild) {
