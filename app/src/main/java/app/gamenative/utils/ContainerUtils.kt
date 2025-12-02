@@ -492,25 +492,33 @@ object ContainerUtils {
 
         // Set up container drives to include app
         val defaultDrives = PrefManager.drives
-        val drives = if (gameSource == GameSource.STEAM) {
-            // For Steam games, set up the app directory path
-            val gameId = extractGameIdFromContainerId(appId)
-            val appDirPath = SteamService.getAppDirPath(gameId)
-            val drive: Char = Container.getNextAvailableDriveLetter(defaultDrives)
-            "$defaultDrives$drive:$appDirPath"
-        } else {
-            // For Custom Games, find the game folder and map it to A: drive
-            val gameFolderPath = CustomGameScanner.getFolderPathFromAppId(appId)
-            if (gameFolderPath != null) {
-                // Check if A: is already in defaultDrives, if not use it, otherwise use next available
-                val drive: Char = if (defaultDrives.contains("A:")) {
-                    Container.getNextAvailableDriveLetter(defaultDrives)
+        val drives = when (gameSource) {
+            GameSource.STEAM -> {
+                // For Steam games, set up the app directory path
+                val gameId = extractGameIdFromContainerId(appId)
+                val appDirPath = SteamService.getAppDirPath(gameId)
+                val drive: Char = Container.getNextAvailableDriveLetter(defaultDrives)
+                "$defaultDrives$drive:$appDirPath"
+            }
+            GameSource.CUSTOM_GAME -> {
+                // For Custom Games, find the game folder and map it to A: drive
+                val gameFolderPath = CustomGameScanner.getFolderPathFromAppId(appId)
+                if (gameFolderPath != null) {
+                    // Check if A: is already in defaultDrives, if not use it, otherwise use next available
+                    val drive: Char = if (defaultDrives.contains("A:")) {
+                        Container.getNextAvailableDriveLetter(defaultDrives)
+                    } else {
+                        'A'
+                    }
+                    "$defaultDrives$drive:$gameFolderPath"
                 } else {
-                    'A'
+                    Timber.w("Could not find folder path for Custom Game: $appId")
+                    defaultDrives
                 }
-                "$defaultDrives$drive:$gameFolderPath"
-            } else {
-                Timber.w("Could not find folder path for Custom Game: $appId")
+            }
+            GameSource.GOG -> {
+                // Just use DefaultDrives. We can create a specific one later.
+                Timber.d("Sending to Default Drive: $defaultDrives$drive")
                 defaultDrives
             }
         }
@@ -637,6 +645,7 @@ object ContainerUtils {
         }
 
         // No custom config, so determine the DX wrapper synchronously (only for Steam games)
+        // For GOG and Custom Games, use the default DX wrapper from preferences
         if (gameSource == GameSource.STEAM) {
             runBlocking {
                 try {
@@ -972,6 +981,7 @@ object ContainerUtils {
         return when {
             containerId.startsWith("STEAM_") -> GameSource.STEAM
             containerId.startsWith("CUSTOM_GAME_") -> GameSource.CUSTOM_GAME
+            containerId.startsWith("GOG_") -> GameSource.GOG
             // Add other platforms here..
             else -> GameSource.STEAM // default fallback
         }
