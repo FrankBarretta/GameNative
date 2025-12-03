@@ -1,12 +1,34 @@
 package app.gamenative.ui.screen.settings
 
 import androidx.compose.material3.Text
+import android.content.Context
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import app.gamenative.PrefManager
 import app.gamenative.R
 import app.gamenative.ui.component.dialog.Box64PresetsDialog
 import app.gamenative.ui.component.dialog.ContainerConfigDialog
@@ -16,7 +38,16 @@ import app.gamenative.ui.theme.settingsTileColors
 import app.gamenative.utils.ContainerUtils
 import com.alorma.compose.settings.ui.SettingsGroup
 import com.alorma.compose.settings.ui.SettingsMenuLink
+import kotlinx.coroutines.delay
 
+/**
+ * Displays the Emulation settings group containing links and dialogs for emulation-related configuration.
+ *
+ * Renders menu entries to manage orientation, default container configuration, Box64 and FEXCore presets,
+ * driver manager, contents manager, and Wine/Proton manager. Also provides a vibration intensity setting that
+ * opens a slider dialog; changes are persisted to PrefManager.vibrationIntensity and produce live haptic feedback
+ * while the slider is adjusted.
+ */
 @Composable
 fun SettingsGroupEmulation() {
     SettingsGroup(title = { Text(text = stringResource(R.string.settings_emulation_title)) }) {
@@ -111,5 +142,119 @@ fun SettingsGroupEmulation() {
             subtitle = { Text(text = stringResource(R.string.settings_emulation_wine_proton_manager_subtitle)) },
             onClick = { showWineProtonManager = true },
         )
+        
+        // Vibration Intensity Setting
+        var vibrationIntensity by remember { mutableStateOf(PrefManager.vibrationIntensity) }
+        var showVibrationSliderDialog by rememberSaveable { mutableStateOf(false) }
+        
+        SettingsMenuLink(
+            colors = settingsTileColors(),
+            title = { Text(text = stringResource(R.string.vibration_intensity_title)) },
+            subtitle = { Text(text = "${vibrationIntensity.toInt()}%") },
+            onClick = { showVibrationSliderDialog = true },
+        )
+        
+        if (showVibrationSliderDialog) {
+            VibrationIntensityDialog(
+                initialValue = vibrationIntensity,
+                onConfirm = { newValue ->
+                    PrefManager.vibrationIntensity = newValue
+                    vibrationIntensity = newValue
+                    showVibrationSliderDialog = false
+                },
+                onDismiss = { showVibrationSliderDialog = false }
+            )
+        }
     }
+}
+
+/**
+ * Shows a dialog with a slider to select vibration intensity and provides real-time haptic feedback while the slider changes.
+ *
+ * The slider value is interpreted as a percentage in the range 0–200; nonzero values produce short vibrations whose amplitude is mapped to 0–255, and a value of 0 cancels any ongoing vibration.
+ *
+ * @param initialValue The starting slider value (0..200) representing vibration intensity percentage.
+ * @param onConfirm Called with the current slider value when the user confirms the dialog.
+ * @param onDismiss Called when the dialog is dismissed or the user cancels.
+ */
+@Composable
+fun VibrationIntensityDialog(
+    initialValue: Float,
+    onConfirm: (Float) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var sliderValue by rememberSaveable { mutableStateOf(initialValue) }
+    
+    // Add effect to provide haptic feedback when slider value changes
+    LaunchedEffect(sliderValue) {
+        // Small delay to avoid vibration during slider changes
+        delay(100)
+
+        // Safely obtain the vibrator service; skip if unavailable
+        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            ?: return@LaunchedEffect
+        if (vibrator.hasVibrator()) {
+            // Calculate vibration amplitude based on the current slider position (0-255 range)
+            val amplitude = (sliderValue / 200f * 255f).toInt()
+            if (sliderValue > 0) {
+                // Only vibrate if intensity is above 0%
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator.vibrate(VibrationEffect.createOneShot(100, amplitude.coerceIn(1, 255))) // Use minimum amplitude of 1
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(100) // For older versions, just use duration
+                }
+            } else {
+                // If intensity is at 0%, cancel any ongoing vibration
+                vibrator.cancel()
+            }
+        }
+    }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = stringResource(R.string.vibration_intensity_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.vibration_intensity_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${sliderValue.toInt()}%",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = stringResource(R.string.vibration_intensity_range),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Slider(
+                    value = sliderValue,
+                    onValueChange = { sliderValue = it },
+                    valueRange = 0f..200f,
+                    steps = 199, // For 1% increments
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(sliderValue) }) {
+                Text(text = stringResource(R.string.ok))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.cancel))
+            }
+        }
+    )
 }

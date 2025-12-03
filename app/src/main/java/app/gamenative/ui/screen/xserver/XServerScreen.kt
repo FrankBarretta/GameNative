@@ -120,6 +120,21 @@ import com.winlator.PrefManager as WinlatorPrefManager
 
 @Composable
 @OptIn(ExperimentalComposeUiApi::class)
+/**
+ * Hosts and manages an X server-backed game view and its runtime environment for the specified container.
+ *
+ * Initializes and configures UI, input, and Wine/XServer components for the given app/container ID; registers lifecycle and back handlers; creates the XServerView, touch/keyboard/input overlays, frame-rate overlay, and starts background setup tasks that prepare the container, drivers, audio, and environment. Invokes exit/navigation callbacks when the guest program terminates or the user chooses to exit, and reports launch errors via the provided error callback.
+ *
+ * @param lifecycleOwner The lifecycle owner used to observe activity/lifecycle events (defaults to the current local lifecycle owner).
+ * @param appId Identifier of the container/app to run and configure.
+ * @param bootToContainer If true, keeps the view in container-boot mode (affects fullscreen and window handling).
+ * @param registerBackAction Callback used to register a back-press handler for this screen.
+ * @param navigateBack Called to navigate back in the host app when the game screen finishes or is dismissed.
+ * @param onExit Callback invoked after runtime components are stopped and exit housekeeping is complete.
+ * @param onWindowMapped Optional callback invoked with (Context, Window) when a guest window is mapped.
+ * @param onWindowUnmapped Optional callback invoked with (Window) when a guest window is unmapped.
+ * @param onGameLaunchError Optional callback invoked with an error message when environment or launch setup fails.
+ */
 fun XServerScreen(
     lifecycleOwner: LifecycleOwner = LocalLifecycleOwner.current,
     appId: String,
@@ -508,6 +523,8 @@ fun XServerScreen(
                             }
                             handler.setPreferredInputApi(PreferredInputApi.values()[container.inputType])
                             handler.setDInputMapperType(container.dinputMapperType)
+                            // Update vibration intensity from preferences
+                            handler.setVibrationIntensity(PrefManager.vibrationIntensity)
                             if (container.isDisableMouseInput()) {
                                 PluviaApp.touchpadView?.setTouchscreenMouseDisabled(true)
                             } else if (container.isTouchscreenMode()) {

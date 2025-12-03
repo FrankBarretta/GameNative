@@ -10,6 +10,8 @@ import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 
+import app.gamenative.PrefManager;
+
 // import com.winlator.XServerDisplayActivity;
 import com.winlator.core.StringUtils;
 import com.winlator.inputcontrols.ControllerManager;
@@ -80,6 +82,7 @@ public class WinHandler {
     private short lastLowFreq = 0;  // Use 'short' instead of uint16_t
     private short lastHighFreq = 0; // Use 'short' instead of uint16_t
     private boolean isRumbling = false;
+    private float vibrationIntensity = 100.0f; // Default to 100% (normal)
     private boolean isShowingAssignDialog = false;
     private Context activity;
     private final java.util.Set<Integer> ignoredDeviceIds = new java.util.HashSet<>();
@@ -607,6 +610,18 @@ public class WinHandler {
         rumblePollerThread.start();
     }
 
+    /**
+     * Converts low- and high-frequency rumble values into a vibration and plays it on the controller
+     * or, if unavailable, on the device vibrator.
+     *
+     * <p>The method computes a dominant amplitude from the two 16-bit rumble values, applies the
+     * user-configurable vibration intensity, and attempts to vibrate the physical controller first.
+     * If the controller has no vibrator, it falls back to the phone's vibrator and applies a
+     * perceptual haptic curve to the amplitude.</p>
+     *
+     * @param lowFreq  low-frequency rumble value (unsigned 16-bit interpreted)
+     * @param highFreq high-frequency rumble value (unsigned 16-bit interpreted)
+     */
     private void startVibration(short lowFreq, short highFreq) {
         // --- Step 1: Calculate the base amplitude once at the top ---
         int unsignedLowFreq = lowFreq & 0xFFFF;
@@ -621,33 +636,58 @@ public class WinHandler {
             return;
         }
         isRumbling = true; // We know we are going to try to rumble.
+        
+        // Apply vibration intensity multiplier from settings (convert from percentage to multiplier)
+        float intensityMultiplier = vibrationIntensity / 100.0f;
+        int adjustedAmplitude = Math.round(amplitude * intensityMultiplier);
+        
+        // Ensure the adjusted amplitude stays within valid range
+        if (adjustedAmplitude > 255) adjustedAmplitude = 255;
+        if (adjustedAmplitude <= 1) adjustedAmplitude = 0;
+        
         // --- Step 2: Attempt to vibrate the physical controller first ---
         if (currentController != null) {
             InputDevice device = InputDevice.getDevice(currentController.getDeviceId());
             if (device != null) {
                 Vibrator controllerVibrator = device.getVibrator();
                 if (controllerVibrator != null && controllerVibrator.hasVibrator()) {
-                    // Vibrate the physical controller and then we are done.
-                    controllerVibrator.vibrate(VibrationEffect.createOneShot(50, amplitude));
+                    // Vibrate the physical controller with adjusted amplitude
+                    if (adjustedAmplitude > 0) {
+                        controllerVibrator.vibrate(VibrationEffect.createOneShot(50, adjustedAmplitude));
+                    }
                     return;
                 }
             }
         }
         // --- Step 3: Fallback to phone vibration if physical controller fails or doesn't exist ---
         Log.w("WinHandler", "No physical controller vibrator found, falling back to device vibration.");
-        Vibrator phoneVibrator = (Vibrator) activity.getSystemService(Context.VIBRATOR_SERVICE);
+        Object vibratorService = activity.getSystemService(Context.VIBRATOR_SERVICE);
+        Vibrator phoneVibrator = null;
+        if (vibratorService instanceof Vibrator) {
+            phoneVibrator = (Vibrator) vibratorService;
+        }
         if (phoneVibrator != null && phoneVibrator.hasVibrator()) {
-            // --- HAPTIC CURVE LOGIC to make phone vibration feel better ---
-            float normalizedAmplitude = (float) amplitude / 255.0f;
-            float curvedAmplitude = (float) Math.pow(normalizedAmplitude, 0.6f);
-            int finalPhoneAmplitude = (int) (curvedAmplitude * 255);
-            if (finalPhoneAmplitude > 255) finalPhoneAmplitude = 255;
-            if (finalPhoneAmplitude <= 1) finalPhoneAmplitude = 0;
-            if (finalPhoneAmplitude > 0) {
-                phoneVibrator.vibrate(VibrationEffect.createOneShot(50, finalPhoneAmplitude));
+            // Apply the same intensity multiplier to phone vibration
+            if (adjustedAmplitude > 0) {
+                // --- HAPTIC CURVE LOGIC to make phone vibration feel better ---
+                float normalizedAmplitude = (float) adjustedAmplitude / 255.0f;
+                float curvedAmplitude = (float) Math.pow(normalizedAmplitude, 0.6f);
+                int finalPhoneAmplitude = (int) (curvedAmplitude * 255);
+                if (finalPhoneAmplitude > 255) finalPhoneAmplitude = 255;
+                if (finalPhoneAmplitude <= 1) finalPhoneAmplitude = 0;
+                if (finalPhoneAmplitude > 0) {
+                    phoneVibrator.vibrate(VibrationEffect.createOneShot(50, finalPhoneAmplitude));
+                }
             }
         }
     }
+    
+    /**
+     * Stops any active vibration on the connected controller and the device, and clears the internal rumble state.
+     *
+     * If no rumble is active this method returns without action. When active, it cancels vibration on the current
+     * controller (if present) and on the phone's vibrator, then sets the internal `isRumbling` flag to false.
+     */
     private void stopVibration() {
         if (!isRumbling) return; // Simplified check
         // Attempt to stop the physical controller's vibration if it exists
@@ -661,7 +701,11 @@ public class WinHandler {
             }
         }
         // Always attempt to stop the phone's vibration
-        Vibrator phoneVibrator = (Vibrator) activity.getSystemService(Context.VIBRATOR_SERVICE);
+        Object vibratorService = activity.getSystemService(Context.VIBRATOR_SERVICE);
+        Vibrator phoneVibrator = null;
+        if (vibratorService instanceof Vibrator) {
+            phoneVibrator = (Vibrator) vibratorService;
+        }
         if (phoneVibrator != null) {
             phoneVibrator.cancel();
         }
@@ -758,11 +802,43 @@ public class WinHandler {
         this.preferredInputApi = preferredInputApi;
     }
 
+    /**
+     * Returns the currently active external controller for player input.
+     *
+     * @return the active ExternalController, or {@code null} if no controller is assigned
+     */
     public ExternalController getCurrentController() {
         return this.currentController;
     }
+    
+    /**
+     * Set the vibration intensity used when converting rumble frequencies to vibration amplitude.
+     *
+     * The provided intensity is treated as a percentage and clamped to the range 0.0 to 200.0 before being stored.
+     *
+     * @param intensity desired vibration intensity percentage (will be clamped to 0.0–200.0)
+     */
+    public void setVibrationIntensity(float intensity) {
+        // Ensure intensity is within valid range (0% to 200%)
+        this.vibrationIntensity = Math.max(0.0f, Math.min(200.0f, intensity));
+    }
+    
+    /**
+     * Get the current vibration intensity used for controller and phone haptics.
+     *
+     * @return the vibration intensity as a percentage (clamped between 0.0 and 200.0)
+     */
+    public float getVibrationIntensity() {
+        return this.vibrationIntensity;
+    }
 
 
+    /**
+     * Writes the current controller's input state into the primary memory-mapped gamepad buffer.
+     *
+     * This convenience method uses the handler's active controller and the primary gamepad buffer
+     * to update the shared memory representation consumed by the client.
+     */
     private void sendMemoryFileState() {
         sendMemoryFileState(currentController, gamepadBuffer);
     }

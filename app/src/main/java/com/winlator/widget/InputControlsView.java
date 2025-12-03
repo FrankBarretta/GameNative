@@ -64,6 +64,14 @@ public class InputControlsView extends View {
     private VibrationEffect effect;
     private boolean showTouchscreenControls = true;
 
+    /**
+     * Creates an InputControlsView configured for touch and input handling.
+     *
+     * Sets view visual and layout properties (clickable, focusable, background, pointer icon, layout params)
+     * and initializes the vibrator and one-shot VibrationEffect when a physical vibrator is available.
+     *
+     * @param context the Context used to access resources and system services
+     */
     @SuppressLint("ResourceType")
     public InputControlsView(Context context) {
         super(context);
@@ -74,10 +82,25 @@ public class InputControlsView extends View {
         setPointerIcon(PointerIcon.load(getResources(), R.drawable.hidden_pointer_arrow));
         setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        vibrator = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
-        effect = VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE);
+        Object vibratorService = context.getSystemService(Context.VIBRATOR_SERVICE);
+        if (vibratorService instanceof Vibrator) {
+            vibrator = (Vibrator) vibratorService;
+            // Check if the vibrator has a physical vibrator
+            if (vibrator.hasVibrator()) {
+                effect = VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE);
+            } else {
+                vibrator = null; // Device has vibrator service but no actual vibrator
+            }
+        } else {
+            vibrator = null; // Device doesn't support vibrator service
+        }
     }
 
+    /**
+     * Toggle the view's element edit mode.
+     *
+     * @param editMode true to enter edit mode (allow creating, moving, and removing on-screen control elements); false to exit edit mode
+     */
     public void setEditMode(boolean editMode) {
         this.editMode = editMode;
     }
