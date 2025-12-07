@@ -463,6 +463,32 @@ class GOGService @Inject constructor() : Service() {
         }
 
         /**
+         * Update GOG game in database
+         */
+        suspend fun updateGOGGame(game: GOGGame) {
+            getInstance()?.gogLibraryManager?.updateGame(game)
+        }
+
+        /**
+         * Check if a GOG game is installed (synchronous for UI)
+         */
+        fun isGameInstalled(gameId: String): Boolean {
+            return runBlocking(Dispatchers.IO) {
+                getInstance()?.gogLibraryManager?.getGameById(gameId)?.isInstalled == true
+            }
+        }
+
+        /**
+         * Get install path for a GOG game (synchronous for UI)
+         */
+        fun getInstallPath(gameId: String): String? {
+            return runBlocking(Dispatchers.IO) {
+                val game = getInstance()?.gogLibraryManager?.getGameById(gameId)
+                if (game?.isInstalled == true) game.installPath else null
+            }
+        }
+
+        /**
          * Clean up active download when game is deleted
          */
         fun cleanupDownload(gameId: String) {

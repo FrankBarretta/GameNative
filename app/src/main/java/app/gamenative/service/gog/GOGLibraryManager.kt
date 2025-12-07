@@ -26,44 +26,86 @@ class GOGLibraryManager @Inject constructor(
     }
 
     /**
+     * Update a GOG game in database
+     */
+    suspend fun updateGame(game: GOGGame) {
+        withContext(Dispatchers.IO) {
+            gogGameDao.update(game)
+        }
+    }
+
+    /**
      * Start background library sync
-     * TODO: Implement full progressive library fetching from GOG API
+     * Progressively fetches and updates the GOG library in the background
      */
     suspend fun startBackgroundSync(context: Context): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             if (!GOGService.hasStoredCredentials(context)) {
+                Timber.w("Cannot start background sync: no stored credentials")
                 return@withContext Result.failure(Exception("No stored credentials found"))
             }
 
             Timber.i("Starting GOG library background sync...")
 
-            // TODO: Implement progressive library fetching like in the branch
-            // This should:
-            // 1. Call getUserLibraryProgressively
-            // 2. Fetch games one by one from GOG API
-            // 3. Enrich with GamesDB metadata
-            // 4. Update database using gogGameDao.upsertPreservingInstallStatus()
-
-            Timber.w("GOG library sync not yet fully implemented")
-            Result.success(Unit)
+            // Use the same refresh logic but don't block on completion
+            val result = refreshLibrary(context)
+            
+            if (result.isSuccess) {
+                val count = result.getOrNull() ?: 0
+                Timber.i("Background sync completed: $count games synced")
+                Result.success(Unit)
+            } else {
+                val error = result.exceptionOrNull()
+                Timber.e(error, "Background sync failed: ${error?.message}")
+                Result.failure(error ?: Exception("Background sync failed"))
+            }
         } catch (e: Exception) {
-            Timber.e(e, "Failed to sync GOG library")
+            Timber.e(e, "Failed to sync GOG library in background")
             Result.failure(e)
         }
     }
 
     /**
      * Refresh the entire library (called manually by user)
+     * Fetches all games from GOG API and updates the database
      */
     suspend fun refreshLibrary(context: Context): Result<Int> = withContext(Dispatchers.IO) {
         try {
             if (!GOGService.hasStoredCredentials(context)) {
+                Timber.w("Cannot refresh library: not authenticated with GOG")
                 return@withContext Result.failure(Exception("Not authenticated with GOG"))
             }
 
-            // TODO: Implement full library refresh
-            Timber.i("Refreshing GOG library...")
-            Result.success(0)
+            Timber.i("Refreshing GOG library from GOG API...")
+            
+            // Fetch games from GOG via GOGDL Python backend
+            val listResult = GOGService.listGames(context)
+            
+            if (listResult.isFailure) {
+                val error = listResult.exceptionOrNull()
+                Timber.e(error, "Failed to fetch games from GOG: ${error?.message}")
+                return@withContext Result.failure(error ?: Exception("Failed to fetch GOG library"))
+            }
+            
+            val games = listResult.getOrNull() ?: emptyList()
+            Timber.i("Successfully fetched ${games.size} games from GOG")
+            
+            if (games.isEmpty()) {
+                Timber.w("No games found in GOG library")
+                return@withContext Result.success(0)
+            }
+            
+            // Log sample of fetched games
+            games.take(3).forEach { game ->
+                Timber.d("Fetched game: ${game.title} (${game.id}) - ${game.developer}")
+            }
+            
+            // Update database using upsert to preserve install status
+            Timber.d("Upserting ${games.size} games to database...")
+            gogGameDao.upsertPreservingInstallStatus(games)
+            
+            Timber.i("Successfully refreshed GOG library with ${games.size} games")
+            Result.success(games.size)
         } catch (e: Exception) {
             Timber.e(e, "Failed to refresh GOG library")
             Result.failure(e)

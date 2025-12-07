@@ -66,6 +66,7 @@ import kotlinx.coroutines.launch
 import app.gamenative.utils.LocaleHelper
 import app.gamenative.ui.component.dialog.GOGLoginDialog
 import app.gamenative.service.gog.GOGService
+import app.gamenative.service.gog.GOGLibraryManager
 import dagger.hilt.android.EntryPointAccessors
 import app.gamenative.di.DatabaseModule
 
@@ -78,7 +79,7 @@ fun SettingsGroupInterface(
 ) {
     val context = LocalContext.current
 
-    // Get GOGGameDao from Hilt
+    // Get GOGGameDao and GOGLibraryManager from Hilt
     val gogGameDao = remember {
         val appContext = context.applicationContext
         val entryPoint = EntryPointAccessors.fromApplication(
@@ -86,6 +87,15 @@ fun SettingsGroupInterface(
             DatabaseEntryPoint::class.java
         )
         entryPoint.gogGameDao()
+    }
+    
+    val gogLibraryManager = remember {
+        val appContext = context.applicationContext
+        val entryPoint = EntryPointAccessors.fromApplication(
+            appContext,
+            DatabaseEntryPoint::class.java
+        )
+        entryPoint.gogLibraryManager()
     }
 
     var openWebLinks by rememberSaveable { mutableStateOf(PrefManager.openWebLinksExternally) }
@@ -315,35 +325,19 @@ fun SettingsGroupInterface(
                 coroutineScope.launch {
                     try {
                         timber.log.Timber.i("[SettingsGOG]: Syncing GOG library...")
-                        val libraryResult = app.gamenative.service.gog.GOGService.listGames(context)
+                        
+                        // Use GOGLibraryManager.refreshLibrary() which handles everything
+                        val result = gogLibraryManager.refreshLibrary(context)
 
-                        if (libraryResult.isSuccess) {
-                            val games = libraryResult.getOrNull() ?: emptyList()
-                            gogLibraryGameCount = games.size
-                            timber.log.Timber.i("[SettingsGOG]: ✓ Synced ${games.size} games from GOG library")
-
-                            // Save games to database
-                            try {
-                                withContext(Dispatchers.IO) {
-                                    gogGameDao.upsertPreservingInstallStatus(games)
-                                }
-                                timber.log.Timber.i("[SettingsGOG]: ✓ Saved ${games.size} games to database")
-                            } catch (e: Exception) {
-                                timber.log.Timber.e(e, "[SettingsGOG]: Failed to save games to database")
-                            }
-
-                            // Log first few games
-                            games.take(5).forEach { game ->
-                                timber.log.Timber.d("[SettingsGOG]:   - ${game.title} (${game.id})")
-                            }
-                            if (games.size > 5) {
-                                timber.log.Timber.d("[SettingsGOG]:   ... and ${games.size - 5} more")
-                            }
+                        if (result.isSuccess) {
+                            val count = result.getOrNull() ?: 0
+                            gogLibraryGameCount = count
+                            timber.log.Timber.i("[SettingsGOG]: ✓ Successfully synced $count games from GOG")
 
                             gogLibrarySyncing = false
                             gogLibrarySyncSuccess = true
                         } else {
-                            val error = libraryResult.exceptionOrNull()?.message ?: "Failed to sync library"
+                            val error = result.exceptionOrNull()?.message ?: "Failed to sync library"
                             timber.log.Timber.e("[SettingsGOG]: Library sync failed: $error")
                             gogLibrarySyncing = false
                             gogLibrarySyncError = error
@@ -760,8 +754,9 @@ private fun Preview_SettingsScreen() {
 /**
  * Hilt EntryPoint to access DAOs from Composables
  */
-@dagger.hilt.EntryPoint
-@dagger.hilt.InstallIn(dagger.hilt.components.SingletonComponent::class)
-interface DatabaseEntryPoint {
-    fun gogGameDao(): app.gamenative.db.dao.GOGGameDao
-}
+    @dagger.hilt.EntryPoint
+    @dagger.hilt.InstallIn(dagger.hilt.components.SingletonComponent::class)
+    interface DatabaseEntryPoint {
+        fun gogGameDao(): app.gamenative.db.dao.GOGGameDao
+        fun gogLibraryManager(): GOGLibraryManager
+    }
