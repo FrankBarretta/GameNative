@@ -247,6 +247,11 @@ class GOGAppScreen : BaseAppScreen() {
                 if (result.isSuccess) {
                     val info = result.getOrNull()
                     Timber.i("GOG download started successfully for: $gameId")
+                    
+                    // Emit download started event to update UI state immediately
+                    app.gamenative.PluviaApp.events.emitJava(
+                        app.gamenative.events.AndroidEvent.DownloadStatusChanged(libraryItem.gameId, true)
+                    )
 
                     // Monitor download completion
                     info?.let { downloadInfo ->
@@ -272,16 +277,29 @@ class GOGAppScreen : BaseAppScreen() {
                                 Timber.d("Updated GOG game install status in database")
                             }
 
-                            // Trigger library refresh
+                            // Emit download stopped event
+                            app.gamenative.PluviaApp.events.emitJava(
+                                app.gamenative.events.AndroidEvent.DownloadStatusChanged(libraryItem.gameId, false)
+                            )
+
+                            // Trigger library refresh for install status
                             app.gamenative.PluviaApp.events.emitJava(
                                 app.gamenative.events.AndroidEvent.LibraryInstallStatusChanged(libraryItem.gameId)
                             )
                         } else {
                             Timber.w("GOG download did not complete successfully: $finalProgress")
+                            // Emit download stopped event even if failed/cancelled
+                            app.gamenative.PluviaApp.events.emitJava(
+                                app.gamenative.events.AndroidEvent.DownloadStatusChanged(libraryItem.gameId, false)
+                            )
                         }
                     }
                 } else {
                     Timber.e(result.exceptionOrNull(), "Failed to start GOG download")
+                    // Emit download stopped event if download failed to start
+                    app.gamenative.PluviaApp.events.emitJava(
+                        app.gamenative.events.AndroidEvent.DownloadStatusChanged(libraryItem.gameId, false)
+                    )
                     withContext(Dispatchers.Main) {
                         android.widget.Toast.makeText(
                             context,
@@ -527,6 +545,25 @@ class GOGAppScreen : BaseAppScreen() {
     ) {
         Timber.tag(TAG).d("AdditionalDialogs: composing for appId=${libraryItem.appId}")
         val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+
+        // Listen for download status changes to trigger UI refresh
+        LaunchedEffect(libraryItem.appId) {
+            val downloadListener: (app.gamenative.events.AndroidEvent.DownloadStatusChanged) -> Unit = { event ->
+                if (event.appId == libraryItem.gameId) {
+                    Timber.tag(TAG).d("Download status changed for ${libraryItem.appId}: isDownloading=${event.isDownloading}")
+                    // Trigger state refresh in BaseAppScreen by emitting install status event
+                    scope.launch {
+                        kotlinx.coroutines.delay(100) // Small delay to ensure download info is updated
+                        app.gamenative.PluviaApp.events.emitJava(
+                            app.gamenative.events.AndroidEvent.LibraryInstallStatusChanged(libraryItem.gameId)
+                        )
+                    }
+                }
+            }
+            app.gamenative.PluviaApp.events.on<app.gamenative.events.AndroidEvent.DownloadStatusChanged, Unit>(downloadListener)
+            kotlinx.coroutines.awaitCancellation()
+        }
 
         // Monitor uninstall dialog state
         var showUninstallDialog by remember { mutableStateOf(shouldShowUninstallDialog(libraryItem.appId)) }
