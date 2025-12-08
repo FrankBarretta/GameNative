@@ -689,21 +689,33 @@ class GOGService @Inject constructor() : Service() {
                                 id = gameObj.optString("id", ""),
                                 title = gameObj.optString("title", "Unknown Game"),
                                 slug = gameObj.optString("slug", ""),
-                                imageUrl = gameObj.optString("image", ""),
-                                iconUrl = gameObj.optString("icon", ""),
+                                imageUrl = gameObj.optString("imageUrl", ""),
+                                iconUrl = gameObj.optString("iconUrl", ""),
                                 description = gameObj.optString("description", ""),
                                 releaseDate = gameObj.optString("releaseDate", ""),
                                 developer = gameObj.optString("developer", ""),
                                 publisher = gameObj.optString("publisher", ""),
                                 genres = genresList,
                                 languages = languagesList,
-                                downloadSize = 0L, // Will be fetched separately when needed
+                                downloadSize = gameObj.optLong("downloadSize", 0L),
                                 installSize = 0L,
                                 isInstalled = false,
                                 installPath = "",
                                 lastPlayed = 0L,
                                 playTime = 0L,
                             )
+
+                            // Debug: Log the raw developer/publisher data from API
+                            if (i == 0) {  // Only log first game to avoid spam
+                                Timber.tag("GOG").d("=== DEBUG: First game API response ===")
+                                Timber.tag("GOG").d("Game: ${game.title} (${game.id})")
+                                Timber.tag("GOG").d("Developer field: ${gameObj.optString("developer", "EMPTY")}")
+                                Timber.tag("GOG").d("Publisher field: ${gameObj.optString("publisher", "EMPTY")}")
+                                Timber.tag("GOG").d("_debug_developers_raw: ${gameObj.opt("_debug_developers_raw")}")
+                                Timber.tag("GOG").d("_debug_publisher_raw: ${gameObj.opt("_debug_publisher_raw")}")
+                                Timber.tag("GOG").d("Full game object keys: ${gameObj.keys().asSequence().toList()}")
+                                Timber.tag("GOG").d("=====================================")
+                            }
 
                             games.add(game)
                         } catch (e: Exception) {
@@ -794,7 +806,6 @@ class GOGService @Inject constructor() : Service() {
                 Result.failure(e)
             }
         }
-
 
         /**
          * Execute GOGDL command with progress callback
@@ -905,33 +916,7 @@ class GOGService @Inject constructor() : Service() {
          * TODO: Implement cloud save sync
          */
         suspend fun syncCloudSaves(gameId: String, savePath: String, authConfigPath: String, timestamp: Float = 0.0f): Result<Unit> {
-
-            // ! Keep out CloudSaves till we understand how they work.
-            // ! Return Result.success()
-
             return Result.success(Unit)
-            // return try {
-            //     Timber.i("Starting GOG cloud save sync for game $gameId")
-
-            //     val result = executeCommand(
-            //         "--auth-config-path", authConfigPath,
-            //         "save-sync", savePath,
-            //         "--dirname", gameId,
-            //         "--timestamp", timestamp.toString(),
-            //     )
-
-            //     if (result.isSuccess) {
-            //         Timber.i("GOG cloud save sync completed successfully for game $gameId")
-            //         Result.success(Unit)
-            //     } else {
-            //         val error = result.exceptionOrNull() ?: Exception("Save sync failed")
-            //         Timber.e(error, "GOG cloud save sync failed for game $gameId")
-            //         Result.failure(error)
-            //     }
-            // } catch (e: Exception) {
-            //     Timber.e(e, "GOG cloud save sync exception for game $gameId")
-            //     Result.failure(e)
-            // }
         }
 
         /**

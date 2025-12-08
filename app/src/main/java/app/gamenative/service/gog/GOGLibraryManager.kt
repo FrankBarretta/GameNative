@@ -45,14 +45,14 @@ class GOGLibraryManager @Inject constructor(
                 return@withContext Result.failure(Exception("No stored credentials found"))
             }
 
-            Timber.i("Starting GOG library background sync...")
+            Timber.tag("GOG").i("Starting GOG library background sync...")
 
             // Use the same refresh logic but don't block on completion
             val result = refreshLibrary(context)
-            
+
             if (result.isSuccess) {
                 val count = result.getOrNull() ?: 0
-                Timber.i("Background sync completed: $count games synced")
+                Timber.tag("GOG").i("Background sync completed: $count games synced")
                 Result.success(Unit)
             } else {
                 val error = result.exceptionOrNull()
@@ -76,35 +76,54 @@ class GOGLibraryManager @Inject constructor(
                 return@withContext Result.failure(Exception("Not authenticated with GOG"))
             }
 
-            Timber.i("Refreshing GOG library from GOG API...")
-            
+            Timber.tag("GOG").i("Refreshing GOG library from GOG API...")
+
             // Fetch games from GOG via GOGDL Python backend
             val listResult = GOGService.listGames(context)
-            
+
             if (listResult.isFailure) {
                 val error = listResult.exceptionOrNull()
                 Timber.e(error, "Failed to fetch games from GOG: ${error?.message}")
                 return@withContext Result.failure(error ?: Exception("Failed to fetch GOG library"))
             }
-            
+
             val games = listResult.getOrNull() ?: emptyList()
-            Timber.i("Successfully fetched ${games.size} games from GOG")
-            
+            Timber.tag("GOG").i("Successfully fetched ${games.size} games from GOG")
+
             if (games.isEmpty()) {
                 Timber.w("No games found in GOG library")
                 return@withContext Result.success(0)
             }
-            
+
             // Log sample of fetched games
             games.take(3).forEach { game ->
-                Timber.d("Fetched game: ${game.title} (${game.id}) - ${game.developer}")
+                Timber.tag("GOG").d("""
+                    |=== Fetched GOG Game ===
+                    |ID: ${game.id}
+                    |Title: ${game.title}
+                    |Slug: ${game.slug}
+                    |Developer: ${game.developer}
+                    |Publisher: ${game.publisher}
+                    |Description: ${game.description.take(100)}...
+                    |Release Date: ${game.releaseDate}
+                    |Image URL: ${game.imageUrl}
+                    |Icon URL: ${game.iconUrl}
+                    |Genres: ${game.genres.joinToString(", ")}
+                    |Languages: ${game.languages.joinToString(", ")}
+                    |Download Size: ${game.downloadSize}
+                    |Install Size: ${game.installSize}
+                    |Is Installed: ${game.isInstalled}
+                    |Install Path: ${game.installPath}
+                    |Type: ${game.type}
+                    |=======================
+                """.trimMargin())
             }
-            
+
             // Update database using upsert to preserve install status
             Timber.d("Upserting ${games.size} games to database...")
             gogGameDao.upsertPreservingInstallStatus(games)
-            
-            Timber.i("Successfully refreshed GOG library with ${games.size} games")
+
+            Timber.tag("GOG").i("Successfully refreshed GOG library with ${games.size} games")
             Result.success(games.size)
         } catch (e: Exception) {
             Timber.e(e, "Failed to refresh GOG library")

@@ -52,22 +52,50 @@ def handle_list(arguments, api_handler):
                 logger.info(f"Fetching details for game {index}/{len(owned_games)}: {game_id}")
 
                 # Get full game info with expanded data
-                game_info = api_handler.get_item_data(game_id, expanded=['downloads'])
+                game_info = api_handler.get_item_data(game_id, expanded=['downloads', 'description', 'screenshots', 'videos'])
+
+                # Log what we got back
+                if game_info:
+                    logger.info(f"Game {game_id} API response keys: {list(game_info.keys())}")
+                    logger.debug(f"Game {game_id} has developers: {'developers' in game_info}")
+                    logger.debug(f"Game {game_id} has publisher: {'publisher' in game_info}")
+                    logger.debug(f"Game {game_id} has genres: {'genres' in game_info}")
 
                 if game_info:
+                    # Extract image URLs and ensure they have protocol
+                    logo2x = game_info.get('images', {}).get('logo2x', '')
+                    logo = game_info.get('images', {}).get('logo', '')
+                    icon = game_info.get('images', {}).get('icon', '')
+
+                    # Add https: protocol if missing
+                    if logo2x and logo2x.startswith('//'):
+                        logo2x = 'https:' + logo2x
+                    if logo and logo.startswith('//'):
+                        logo = 'https:' + logo
+                    if icon and icon.startswith('//'):
+                        icon = 'https:' + icon
+
+                    # Extract download size from first installer
+                    download_size = 0
+                    downloads = game_info.get('downloads', {})
+                    installers = downloads.get('installers', [])
+                    if installers and len(installers) > 0:
+                        download_size = installers[0].get('total_size', 0)
+
                     # Extract relevant fields
                     game_entry = {
                         "id": game_id,
                         "title": game_info.get('title', 'Unknown'),
                         "slug": game_info.get('slug', ''),
-                        "imageUrl": game_info.get('images', {}).get('logo2x', '') or game_info.get('images', {}).get('logo', ''),
-                        "iconUrl": game_info.get('images', {}).get('icon', ''),
+                        "imageUrl": logo2x or logo,
+                        "iconUrl": icon,
                         "developer": game_info.get('developers', [{}])[0].get('name', '') if game_info.get('developers') else '',
-                        "publisher": game_info.get('publisher', {}).get('name', ''),
-                        "genres": [g.get('name', '') for g in game_info.get('genres', [])],
+                        "publisher": game_info.get('publisher', {}).get('name', '') if isinstance(game_info.get('publisher'), dict) else game_info.get('publisher', ''),
+                        "genres": [g.get('name', '') if isinstance(g, dict) else str(g) for g in game_info.get('genres', [])],
                         "languages": list(game_info.get('languages', {}).keys()),
-                        "description": game_info.get('description', {}).get('lead', ''),
-                        "releaseDate": game_info.get('release_date', '')
+                        "description": game_info.get('description', {}).get('lead', '') if isinstance(game_info.get('description'), dict) else '',
+                        "releaseDate": game_info.get('release_date', ''),
+                        "downloadSize": download_size
                     }
                     games_list.append(game_entry)
                     logger.debug(f"  ✓ {game_entry['title']}")

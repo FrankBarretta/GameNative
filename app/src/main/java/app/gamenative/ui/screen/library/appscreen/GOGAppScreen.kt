@@ -140,7 +140,7 @@ class GOGAppScreen : BaseAppScreen() {
             releaseDate = 0L, // GOG uses string release dates, would need parsing
             developer = game?.developer ?: "Unknown"
         )
-        Timber.tag(TAG).d("Returning GameDisplayInfo: name=${displayInfo.name}, developer=${displayInfo.developer}")
+        Timber.tag(TAG).d("Returning GameDisplayInfo: name=${displayInfo.name}, iconUrl=${displayInfo.iconUrl}, heroImageUrl=${displayInfo.heroImageUrl}, developer=${displayInfo.developer}")
         return displayInfo
     }
 
