@@ -6,6 +6,7 @@ import app.gamenative.data.GameSource
 import app.gamenative.enums.Marker
 import app.gamenative.service.SteamService
 import app.gamenative.service.gog.GOGConstants
+import app.gamenative.utils.BestConfigService
 import app.gamenative.utils.CustomGameScanner
 import com.winlator.container.Container
 import com.winlator.container.ContainerData
@@ -20,6 +21,7 @@ import com.winlator.inputcontrols.ControlsProfile
 import com.winlator.inputcontrols.InputControlsManager
 import com.winlator.winhandler.WinHandler.PreferredInputApi
 import com.winlator.xenvironment.ImageFs
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
@@ -104,6 +106,7 @@ object ContainerUtils {
 			fexcoreTSOMode = PrefManager.fexcoreTSOMode,
 			fexcoreX87Mode = PrefManager.fexcoreX87Mode,
 			fexcoreMultiBlock = PrefManager.fexcoreMultiBlock,
+			fexcorePreset = PrefManager.fexcorePreset,
 			renderer = PrefManager.renderer,
 			csmt = PrefManager.csmt,
             videoPciDeviceID = PrefManager.videoPciDeviceID,
@@ -162,6 +165,7 @@ object ContainerUtils {
         PrefManager.fexcoreTSOMode = containerData.fexcoreTSOMode
         PrefManager.fexcoreX87Mode = containerData.fexcoreX87Mode
         PrefManager.fexcoreMultiBlock = containerData.fexcoreMultiBlock
+        PrefManager.fexcorePreset = containerData.fexcorePreset
 		// Persist renderer and controller defaults
 		PrefManager.renderer = containerData.renderer
 		PrefManager.xinputEnabled = containerData.enableXInput
@@ -248,6 +252,7 @@ object ContainerUtils {
             wineVersion = container.wineVersion,
             emulator = container.emulator,
             fexcoreVersion = container.fexCoreVersion,
+            fexcorePreset = container.getFEXCorePreset(),
             language = container.language,
             sdlControllerAPI = container.isSdlControllerAPI,
             forceDlc = container.isForceDlc,
@@ -275,6 +280,39 @@ object ContainerUtils {
     fun applyToContainer(context: Context, appId: String, containerData: ContainerData) {
         val container = getContainer(context, appId)
         applyToContainer(context, container, containerData)
+    }
+
+    /**
+     * Applies best config map to containerData, handling all possible fields.
+     * Used when applyKnownConfig=true returns all validated fields.
+     */
+    fun applyBestConfigMapToContainerData(containerData: ContainerData, bestConfigMap: Map<String, Any?>): ContainerData {
+        var updatedData = containerData
+        bestConfigMap.forEach { (key, value) ->
+            updatedData = when (key) {
+                "executablePath" -> value?.let { updatedData.copy(executablePath = it as? String ?: updatedData.executablePath) } ?: updatedData
+                "graphicsDriver" -> value?.let { updatedData.copy(graphicsDriver = it as? String ?: updatedData.graphicsDriver) } ?: updatedData
+                "graphicsDriverVersion" -> value?.let { updatedData.copy(graphicsDriverVersion = it as? String ?: updatedData.graphicsDriverVersion) } ?: updatedData
+                "graphicsDriverConfig" -> value?.let { updatedData.copy(graphicsDriverConfig = it as? String ?: updatedData.graphicsDriverConfig) } ?: updatedData
+                "dxwrapper" -> value?.let { updatedData.copy(dxwrapper = it as? String ?: updatedData.dxwrapper) } ?: updatedData
+                "dxwrapperConfig" -> value?.let { updatedData.copy(dxwrapperConfig = it as? String ?: updatedData.dxwrapperConfig) } ?: updatedData
+                "execArgs" -> value?.let { updatedData.copy(execArgs = it as? String ?: updatedData.execArgs) } ?: updatedData
+                "startupSelection" -> value?.let { updatedData.copy(startupSelection = (it as? Int)?.toByte() ?: updatedData.startupSelection) } ?: updatedData
+                "box64Version" -> value?.let { updatedData.copy(box64Version = it as? String ?: updatedData.box64Version) } ?: updatedData
+                "box64Preset" -> value?.let { updatedData.copy(box64Preset = it as? String ?: updatedData.box64Preset) } ?: updatedData
+                "containerVariant" -> value?.let { updatedData.copy(containerVariant = it as? String ?: updatedData.containerVariant) } ?: updatedData
+                "wineVersion" -> value?.let { updatedData.copy(wineVersion = it as? String ?: updatedData.wineVersion) } ?: updatedData
+                "emulator" -> value?.let { updatedData.copy(emulator = it as? String ?: updatedData.emulator) } ?: updatedData
+                "fexcoreVersion" -> value?.let { updatedData.copy(fexcoreVersion = it as? String ?: updatedData.fexcoreVersion) } ?: updatedData
+                "fexcoreTSOMode" -> value?.let { updatedData.copy(fexcoreTSOMode = it as? String ?: updatedData.fexcoreTSOMode) } ?: updatedData
+                "fexcoreX87Mode" -> value?.let { updatedData.copy(fexcoreX87Mode = it as? String ?: updatedData.fexcoreX87Mode) } ?: updatedData
+                "fexcoreMultiBlock" -> value?.let { updatedData.copy(fexcoreMultiBlock = it as? String ?: updatedData.fexcoreMultiBlock) } ?: updatedData
+                "fexcorePreset" -> value?.let { updatedData.copy(fexcorePreset = it as? String ?: updatedData.fexcorePreset) } ?: updatedData
+                "useLegacyDRM" -> value?.let { updatedData.copy(useLegacyDRM = it as? Boolean ?: updatedData.useLegacyDRM) } ?: updatedData
+                else -> updatedData
+            }
+        }
+        return updatedData
     }
 
     fun applyToContainer(context: Context, container: Container, containerData: ContainerData) {
@@ -343,6 +381,7 @@ object ContainerUtils {
         container.wineVersion = containerData.wineVersion
         container.emulator = containerData.emulator
         container.fexCoreVersion = containerData.fexcoreVersion
+        container.setFEXCorePreset(containerData.fexcorePreset)
         container.setDisableMouseInput(containerData.disableMouseInput)
         container.setTouchscreenMode(containerData.touchscreenMode)
         container.setEmulateKeyboardMouse(containerData.emulateKeyboardMouse)
@@ -585,8 +624,45 @@ object ContainerUtils {
             }
         }
 
-        // Initialize container with default/custom config
-        val containerData = if (customConfig != null) {
+        // Check for cached best config (only for Steam games, only if no custom config provided)
+        var bestConfigMap: Map<String, Any?>? = null
+        if (gameSource == GameSource.STEAM && customConfig == null) {
+            try {
+                val gameId = extractGameIdFromContainerId(appId)
+                val appInfo = SteamService.getAppInfoOf(gameId)
+                if (appInfo != null) {
+                    val gameName = appInfo.name
+                    val gpuName = GPUInformation.getRenderer(context)
+
+                    // Check cache first (synchronous, fast)
+                    // If not cached, make request on background thread (not UI thread)
+                    runBlocking(Dispatchers.IO) {
+                        try {
+                            val bestConfig = BestConfigService.fetchBestConfig(gameName, gpuName)
+                            if (bestConfig != null && bestConfig.matchType != "no_match") {
+                                Timber.i("Applying best config for $gameName (matchType: ${bestConfig.matchType})")
+                                val parsedConfig = BestConfigService.parseConfigToContainerData(
+                                    context,
+                                    bestConfig.bestConfig,
+                                    bestConfig.matchType,
+                                    false
+                                )
+                                if (parsedConfig != null && parsedConfig.isNotEmpty()) {
+                                    bestConfigMap = parsedConfig
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Timber.w(e, "Failed to get best config for container creation: ${e.message}")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "Error checking for best config: ${e.message}")
+            }
+        }
+
+        // Initialize container with default/custom config or best config
+        var containerData = if (customConfig != null) {
             // Use custom config, but ensure drives are set if not specified
             if (customConfig.drives == Container.DEFAULT_DRIVES) {
                 customConfig.copy(drives = drives)
@@ -626,6 +702,7 @@ object ContainerUtils {
 				fexcoreTSOMode = PrefManager.fexcoreTSOMode,
 				fexcoreX87Mode = PrefManager.fexcoreX87Mode,
 				fexcoreMultiBlock = PrefManager.fexcoreMultiBlock,
+				fexcorePreset = PrefManager.fexcorePreset,
 				renderer = PrefManager.renderer,
                 csmt = PrefManager.csmt,
                 videoPciDeviceID = PrefManager.videoPciDeviceID,
@@ -639,6 +716,23 @@ object ContainerUtils {
 				dinputMapperType = PrefManager.dinputMapperType.toByte(),
                 disableMouseInput = PrefManager.disableMouseInput,
             )
+        }
+
+        // Apply best config map to containerData if available
+        // Note: When applyKnownConfig=false (container creation), map only contains executablePath and useLegacyDRM
+        // When applyKnownConfig=true, map contains all validated fields from the best config
+        containerData = if (bestConfigMap != null && bestConfigMap.isNotEmpty()) {
+            var updatedData = containerData
+            bestConfigMap.forEach { (key, value) ->
+                updatedData = when (key) {
+                    "executablePath" -> value?.let { updatedData.copy(executablePath = it as? String ?: updatedData.executablePath) } ?: updatedData
+                    "useLegacyDRM" -> value?.let { updatedData.copy(useLegacyDRM = it as? Boolean ?: updatedData.useLegacyDRM) } ?: updatedData
+                    else -> updatedData
+                }
+            }
+            updatedData
+        } else {
+            containerData
         }
 
         // If custom config is provided, just apply it and return
@@ -816,12 +910,30 @@ object ContainerUtils {
      */
     fun generateOrUpdateEmulationProfile(context: Context, container: Container): ControlsProfile {
         val inputControlsManager = InputControlsManager(context)
-        val profiles = inputControlsManager.getProfiles(false)
+        var profiles = inputControlsManager.getProfiles(false)
+
+        // If profiles are empty, try to force reload from assets
+        if (profiles.isEmpty()) {
+            val profilesDir = InputControlsManager.getProfilesDir(context)
+            try {
+                // Force copy from assets if directory is empty
+                if (FileUtils.isEmpty(profilesDir)) {
+                    FileUtils.copy(context, "inputcontrols/profiles", profilesDir)
+                }
+                // Reload profiles
+                profiles = inputControlsManager.getProfiles(false)
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to reload profiles from assets")
+            }
+        }
 
         // Choose a base profile to clone from (Virtual Gamepad preferred)
         val baseProfile = profiles.firstOrNull { it.id == 3 || it.name.contains("Virtual Gamepad", true) }
             ?: profiles.getOrNull(2)
-            ?: profiles.first()
+            ?: profiles.firstOrNull()
+            ?: throw IllegalStateException(
+                "No control profiles available. Please ensure inputcontrols/profiles assets are present."
+            )
         val baseFile = ControlsProfile.getProfileFile(context, baseProfile.id)
 
         val profileJSONObject = org.json.JSONObject(FileUtils.readString(baseFile))
