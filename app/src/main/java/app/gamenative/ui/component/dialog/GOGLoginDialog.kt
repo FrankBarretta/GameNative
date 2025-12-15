@@ -10,8 +10,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.gamenative.R
 import app.gamenative.service.gog.GOGConstants
 import app.gamenative.ui.theme.PluviaTheme
 import android.content.Intent
@@ -24,6 +26,7 @@ import android.net.Uri
  * 1. Open GOG login URL in browser
  * 2. Login with GOG credentials
  * 3. GOG redirects back to app with authorization code automatically
+ * ! Note: This UI will be temporary as we will migrate to a redirect flow.
  */
 @Composable
 fun GOGLoginDialog(
@@ -36,11 +39,11 @@ fun GOGLoginDialog(
     val context = LocalContext.current
     var authCode by rememberSaveable { mutableStateOf("") }
 
-    if (visible) {
+    if (!visible) return
         AlertDialog(
             onDismissRequest = onDismissRequest,
             icon = { Icon(imageVector = Icons.Default.Login, contentDescription = null) },
-            title = { Text("Sign in to GOG") },
+            title = { Text(stringResource(R.string.gog_login_title)) },
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -48,12 +51,12 @@ fun GOGLoginDialog(
                 ) {
                     // Instructions
                     Text(
-                        text = "Sign in with your GOG account:",
+                        text = stringResource(R.string.gog_login_instruction),
                         style = MaterialTheme.typography.bodyMedium
                     )
 
                     Text(
-                        text = "Tap 'Open GOG Login' and sign in. The app will automatically receive your authorization.",
+                        text = stringResource(R.string.gog_login_auto_auth_info),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -77,14 +80,14 @@ fun GOGLoginDialog(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Open GOG Login")
+                        Text(stringResource(R.string.gog_login_open_button))
                     }
 
                     Divider(modifier = Modifier.padding(vertical = 8.dp))
 
                     // Manual code entry fallback
                     Text(
-                        text = "Or manually paste authorization code:",
+                        text = stringResource(R.string.gog_login_manual_entry),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -93,8 +96,8 @@ fun GOGLoginDialog(
                     OutlinedTextField(
                         value = authCode,
                         onValueChange = { authCode = it.trim() },
-                        label = { Text("Authorization Code (optional)") },
-                        placeholder = { Text("Paste code here if needed...") },
+                        label = { Text(stringResource(R.string.gog_login_auth_code_label)) },
+                        placeholder = { Text(stringResource(R.string.gog_login_auth_code_placeholder)) },
                         singleLine = true,
                         enabled = !isLoading,
                         modifier = Modifier.fillMaxWidth()
@@ -126,7 +129,7 @@ fun GOGLoginDialog(
                     },
                     enabled = !isLoading && authCode.isNotBlank()
                 ) {
-                    Text("Login")
+                    Text(stringResource(R.string.gog_login_button))
                 }
             },
             dismissButton = {
@@ -134,12 +137,13 @@ fun GOGLoginDialog(
                     onClick = onDismissRequest,
                     enabled = !isLoading
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.gog_login_cancel))
                 }
             }
         )
     }
-}@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES or Configuration.UI_MODE_TYPE_NORMAL)
+
+@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES or Configuration.UI_MODE_TYPE_NORMAL)
 @Composable
 private fun Preview_GOGLoginDialog() {
     PluviaTheme {

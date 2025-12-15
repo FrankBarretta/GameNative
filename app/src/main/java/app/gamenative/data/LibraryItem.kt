@@ -47,15 +47,10 @@ data class LibraryItem(
             }
             GameSource.GOG -> {
                 // GoG Images are typically the full URL, but have fallback just in case.
-                if (iconHash.isNotEmpty()) {
-                    if (iconHash.startsWith("http")) {
-                        iconHash
-                    } else {
-                        "${GOGGame.GOG_IMAGE_BASE_URL}/$iconHash"
-                    }
-                } else {
-                    ""
+                if (iconHash.isEmpty()) {
+                    return ""
                 }
+                if (iconHash.startsWith("http")) iconHash else "${GOGGame.GOG_IMAGE_BASE_URL}/$iconHash"
             }
         }
 
