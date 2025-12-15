@@ -53,10 +53,7 @@ class GOGService : Service() {
             }
         }
 
-        /**
-         * Initialize the GOG service with Chaquopy Python
-         * Delegates to GOGPythonBridge
-         */
+
         fun initialize(context: Context): Boolean {
             return GOGPythonBridge.initialize(context)
         }
@@ -65,37 +62,26 @@ class GOGService : Service() {
         // AUTHENTICATION - Delegate to GOGAuthManager
         // ==========================================================================
 
-        /**
-         * Authenticate with GOG using authorization code
-         */
         suspend fun authenticateWithCode(context: Context, authorizationCode: String): Result<GOGCredentials> {
             return GOGAuthManager.authenticateWithCode(context, authorizationCode)
         }
 
-        /**
-         * Check if user has stored credentials
-         */
+
         fun hasStoredCredentials(context: Context): Boolean {
             return GOGAuthManager.hasStoredCredentials(context)
         }
 
-        /**
-         * Get user credentials - automatically handles token refresh if needed
-         */
+
         suspend fun getStoredCredentials(context: Context): Result<GOGCredentials> {
             return GOGAuthManager.getStoredCredentials(context)
         }
 
-        /**
-         * Validate credentials - automatically refreshes tokens if they're expired
-         */
+
         suspend fun validateCredentials(context: Context): Result<Boolean> {
             return GOGAuthManager.validateCredentials(context)
         }
 
-        /**
-         * Clear stored credentials
-         */
+
         fun clearStoredCredentials(context: Context): Boolean {
             return GOGAuthManager.clearStoredCredentials(context)
         }
@@ -120,37 +106,26 @@ class GOGService : Service() {
         // DOWNLOAD OPERATIONS - Delegate to instance GOGManager
         // ==========================================================================
 
-        /**
-         * Check if any download is currently active
-         */
         fun hasActiveDownload(): Boolean {
             return getInstance()?.activeDownloads?.isNotEmpty() ?: false
         }
 
-        /**
-         * Get the currently downloading game ID
-         */
+
         fun getCurrentlyDownloadingGame(): String? {
             return getInstance()?.activeDownloads?.keys?.firstOrNull()
         }
 
-        /**
-         * Get download info for a specific game
-         */
+
         fun getDownloadInfo(gameId: String): DownloadInfo? {
             return getInstance()?.activeDownloads?.get(gameId)
         }
 
-        /**
-         * Clean up active download when game is deleted
-         */
+
         fun cleanupDownload(gameId: String) {
             getInstance()?.activeDownloads?.remove(gameId)
         }
 
-        /**
-         * Cancel an active download for a specific game
-         */
+
         fun cancelDownload(gameId: String): Boolean {
             val instance = getInstance()
             val downloadInfo = instance?.activeDownloads?.get(gameId)
@@ -171,25 +146,16 @@ class GOGService : Service() {
         // GAME & LIBRARY OPERATIONS - Delegate to instance GOGManager
         // ==========================================================================
 
-        /**
-         * Get GOG game info by game ID (synchronously for UI)
-         */
         fun getGOGGameOf(gameId: String): GOGGame? {
             return runBlocking(Dispatchers.IO) {
                 getInstance()?.gogManager?.getGameById(gameId)
             }
         }
 
-        /**
-         * Update GOG game in database
-         */
         suspend fun updateGOGGame(game: GOGGame) {
             getInstance()?.gogManager?.updateGame(game)
         }
 
-        /**
-         * Insert or update GOG game in database
-         */
         suspend fun insertOrUpdateGOGGame(game: GOGGame) {
             val instance = getInstance()
             if (instance == null) {
@@ -200,9 +166,7 @@ class GOGService : Service() {
             instance.gogManager.insertGame(game)
         }
 
-        /**
-         * Check if a GOG game is installed (synchronous for UI)
-         */
+
         fun isGameInstalled(gameId: String): Boolean {
             return runBlocking(Dispatchers.IO) {
                 val game = getInstance()?.gogManager?.getGameById(gameId)
@@ -220,9 +184,7 @@ class GOGService : Service() {
             }
         }
 
-        /**
-         * Get install path for a GOG game (synchronous for UI)
-         */
+
         fun getInstallPath(gameId: String): String? {
             return runBlocking(Dispatchers.IO) {
                 val game = getInstance()?.gogManager?.getGameById(gameId)
@@ -230,25 +192,19 @@ class GOGService : Service() {
             }
         }
 
-        /**
-         * Verify that a GOG game installation is valid and complete
-         */
+
         fun verifyInstallation(gameId: String): Pair<Boolean, String?> {
             return getInstance()?.gogManager?.verifyInstallation(gameId)
                 ?: Pair(false, "Service not available")
         }
 
-        /**
-         * Get the primary executable path for a GOG game
-         */
+
         suspend fun getInstalledExe(context: Context, libraryItem: LibraryItem): String {
             return getInstance()?.gogManager?.getInstalledExe(context, libraryItem)
                 ?: ""
         }
 
-        /**
-         * Get Wine start command for launching a GOG game
-         */
+
         fun getWineStartCommand(
             context: Context,
             libraryItem: LibraryItem,
@@ -263,18 +219,13 @@ class GOGService : Service() {
             ) ?: "\"explorer.exe\""
         }
 
-        /**
-         * Sync GOG library with database
-         */
+
         suspend fun refreshLibrary(context: Context): Result<Int> {
             return getInstance()?.gogManager?.refreshLibrary(context)
                 ?: Result.failure(Exception("Service not available"))
         }
 
-        /**
-         * Download a GOG game with full progress tracking
-         * Launches download in service scope so it runs independently
-         */
+
         fun downloadGame(context: Context, gameId: String, installPath: String): Result<DownloadInfo?> {
             val instance = getInstance() ?: return Result.failure(Exception("Service not available"))
 
@@ -308,18 +259,12 @@ class GOGService : Service() {
             return Result.success(downloadInfo)
         }
 
-        /**
-         * Refresh a single game's metadata from GOG API
-         */
+
         suspend fun refreshSingleGame(gameId: String, context: Context): Result<GOGGame?> {
             return getInstance()?.gogManager?.refreshSingleGame(gameId, context)
                 ?: Result.failure(Exception("Service not available"))
         }
     }
-
-    // ==========================================================================
-    // Instance members
-    // ==========================================================================
 
     private lateinit var notificationHelper: NotificationHelper
 
