@@ -33,6 +33,7 @@ import app.gamenative.PluviaApp
 import app.gamenative.PrefManager
 import app.gamenative.data.GameSource
 import app.gamenative.data.LaunchInfo
+import app.gamenative.data.LibraryItem
 import app.gamenative.data.SteamApp
 import app.gamenative.events.AndroidEvent
 import app.gamenative.events.SteamEvent
@@ -1302,18 +1303,22 @@ private fun getWineStartCommand(
         // For GOG games, use GOGService to get the launch command
         Timber.tag("XServerScreen").i("Launching GOG game: $gameId")
         
+        // Create a LibraryItem from the appId
+        val libraryItem = LibraryItem(
+            appId = appId,
+            name = "", // Name not needed for launch command
+            gameSource = GameSource.GOG
+        )
+        
         val gogCommand = GOGService.getWineStartCommand(
             context = context,
-            gameId = gameId.toString(),
+            libraryItem = libraryItem,
             container = container,
+            bootToContainer = bootToContainer,
+            appLaunchInfo = appLaunchInfo,
             envVars = envVars,
             guestProgramLauncherComponent = guestProgramLauncherComponent
         )
-        
-        if (gogCommand == null) {
-            Timber.tag("XServerScreen").e("Failed to get GOG launch command for game: $gameId")
-            return "winhandler.exe \"wfm.exe\""
-        }
         
         Timber.tag("XServerScreen").i("GOG launch command: $gogCommand")
         return "winhandler.exe $gogCommand"

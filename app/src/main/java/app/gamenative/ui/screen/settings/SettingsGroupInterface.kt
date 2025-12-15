@@ -66,7 +66,7 @@ import kotlinx.coroutines.launch
 import app.gamenative.utils.LocaleHelper
 import app.gamenative.ui.component.dialog.GOGLoginDialog
 import app.gamenative.service.gog.GOGService
-import app.gamenative.service.gog.GOGLibraryManager
+import app.gamenative.service.gog.GOGManager
 import dagger.hilt.android.EntryPointAccessors
 import app.gamenative.di.DatabaseModule
 
@@ -79,7 +79,7 @@ fun SettingsGroupInterface(
 ) {
     val context = LocalContext.current
 
-    // Get GOGGameDao and GOGLibraryManager from Hilt
+    // Get GOGGameDao and GOGManager from Hilt
     val gogGameDao = remember {
         val appContext = context.applicationContext
         val entryPoint = EntryPointAccessors.fromApplication(
@@ -88,14 +88,14 @@ fun SettingsGroupInterface(
         )
         entryPoint.gogGameDao()
     }
-    
-    val gogLibraryManager = remember {
+
+    val gogManager = remember {
         val appContext = context.applicationContext
         val entryPoint = EntryPointAccessors.fromApplication(
             appContext,
             DatabaseEntryPoint::class.java
         )
-        entryPoint.gogLibraryManager()
+        entryPoint.gogManager()
     }
 
     var openWebLinks by rememberSaveable { mutableStateOf(PrefManager.openWebLinksExternally) }
@@ -166,41 +166,23 @@ fun SettingsGroupInterface(
             coroutineScope.launch {
                 try {
                     timber.log.Timber.d("[SettingsGOG]: Starting authentication...")
-                    val authConfigPath = "${context.filesDir}/gog_auth.json"
-                    val result = app.gamenative.service.gog.GOGService.authenticateWithCode(authConfigPath, event.authCode)
+                    val result = app.gamenative.service.gog.GOGService.authenticateWithCode(context, event.authCode)
 
                     if (result.isSuccess) {
                         timber.log.Timber.i("[SettingsGOG]: ✓ Authentication successful!")
 
-                        // Fetch the user's GOG library
-                        timber.log.Timber.i("[SettingsGOG]: Fetching GOG library...")
-                        val libraryResult = app.gamenative.service.gog.GOGService.listGames(context)
+                        // Sync the library using refreshLibrary which handles database updates
+                        timber.log.Timber.i("[SettingsGOG]: Syncing GOG library...")
+                        val syncResult = gogManager.refreshLibrary(context)
 
-                        if (libraryResult.isSuccess) {
-                            val games = libraryResult.getOrNull() ?: emptyList()
-                            timber.log.Timber.i("[SettingsGOG]: ✓ Fetched ${games.size} games from GOG library")
-
-                            // Save games to database
-                            try {
-                                withContext(Dispatchers.IO) {
-                                    gogGameDao.upsertPreservingInstallStatus(games)
-                                }
-                                timber.log.Timber.i("[SettingsGOG]: ✓ Saved ${games.size} games to database")
-                            } catch (e: Exception) {
-                                timber.log.Timber.e(e, "[SettingsGOG]: Failed to save games to database")
-                            }
-
-                            // Log first few games
-                            games.take(5).forEach { game ->
-                                timber.log.Timber.d("[SettingsGOG]:   - ${game.title} (${game.id})")
-                            }
-                            if (games.size > 5) {
-                                timber.log.Timber.d("[SettingsGOG]:   ... and ${games.size - 5} more")
-                            }
+                        if (syncResult.isSuccess) {
+                            val count = syncResult.getOrNull() ?: 0
+                            timber.log.Timber.i("[SettingsGOG]: ✓ Synced $count games from GOG library")
+                            gogLibraryGameCount = count
                         } else {
-                            val error = libraryResult.exceptionOrNull()?.message ?: "Failed to fetch library"
-                            timber.log.Timber.w("[SettingsGOG]: Failed to fetch library: $error")
-                            // Don't fail authentication if library fetch fails
+                            val error = syncResult.exceptionOrNull()?.message ?: "Failed to sync library"
+                            timber.log.Timber.w("[SettingsGOG]: Failed to sync library: $error")
+                            // Don't fail authentication if library sync fails
                         }
 
                         gogLoginLoading = false
@@ -325,9 +307,9 @@ fun SettingsGroupInterface(
                 coroutineScope.launch {
                     try {
                         timber.log.Timber.i("[SettingsGOG]: Syncing GOG library...")
-                        
-                        // Use GOGLibraryManager.refreshLibrary() which handles everything
-                        val result = gogLibraryManager.refreshLibrary(context)
+
+                        // Use GOGManager.refreshLibrary() which handles everything
+                        val result = gogManager.refreshLibrary(context)
 
                         if (result.isSuccess) {
                             val count = result.getOrNull() ?: 0
@@ -637,31 +619,23 @@ fun SettingsGroupInterface(
             coroutineScope.launch {
                 try {
                     timber.log.Timber.d("[SettingsGOG]: Starting manual authentication...")
-                    val authConfigPath = "${context.filesDir}/gog_auth.json"
-                    val result = GOGService.authenticateWithCode(authConfigPath, authCode)
+                    val result = GOGService.authenticateWithCode(context, authCode)
 
                     if (result.isSuccess) {
                         timber.log.Timber.i("[SettingsGOG]: ✓ Manual authentication successful!")
 
-                        // Fetch the user's GOG library
-                        timber.log.Timber.i("[SettingsGOG]: Fetching GOG library...")
-                        val libraryResult = GOGService.listGames(context)
+                        // Sync the library
+                        timber.log.Timber.i("[SettingsGOG]: Syncing GOG library...")
+                        val syncResult = gogManager.refreshLibrary(context)
 
-                        if (libraryResult.isSuccess) {
-                            val games = libraryResult.getOrNull() ?: emptyList()
-                            timber.log.Timber.i("[SettingsGOG]: ✓ Fetched ${games.size} games from GOG library")
-
-                            // Log first 5 games
-                            games.take(5).forEach { game ->
-                                timber.log.Timber.d("[SettingsGOG]:   - ${game.title} (${game.id})")
-                            }
-                            if (games.size > 5) {
-                                timber.log.Timber.d("[SettingsGOG]:   ... and ${games.size - 5} more")
-                            }
+                        if (syncResult.isSuccess) {
+                            val count = syncResult.getOrNull() ?: 0
+                            timber.log.Timber.i("[SettingsGOG]: ✓ Synced $count games from GOG library")
+                            gogLibraryGameCount = count
                         } else {
-                            val error = libraryResult.exceptionOrNull()?.message ?: "Failed to fetch library"
-                            timber.log.Timber.w("[SettingsGOG]: Failed to fetch library: $error")
-                            // Don't fail authentication if library fetch fails
+                            val error = syncResult.exceptionOrNull()?.message ?: "Failed to sync library"
+                            timber.log.Timber.w("[SettingsGOG]: Failed to sync library: $error")
+                            // Don't fail authentication if library sync fails
                         }
 
                         gogLoginLoading = false
@@ -758,5 +732,5 @@ private fun Preview_SettingsScreen() {
     @dagger.hilt.InstallIn(dagger.hilt.components.SingletonComponent::class)
     interface DatabaseEntryPoint {
         fun gogGameDao(): app.gamenative.db.dao.GOGGameDao
-        fun gogLibraryManager(): GOGLibraryManager
+        fun gogManager(): GOGManager
     }

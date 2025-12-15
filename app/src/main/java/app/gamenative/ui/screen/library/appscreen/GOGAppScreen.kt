@@ -246,7 +246,7 @@ class GOGAppScreen : BaseAppScreen() {
                 Timber.d("Downloading GOG game to: $installPath")
 
                 // Start download
-                val result = GOGService.downloadGame(gameId, installPath, authConfigPath)
+                val result = GOGService.downloadGame(context, gameId, installPath)
 
                 if (result.isSuccess) {
                     val info = result.getOrNull()

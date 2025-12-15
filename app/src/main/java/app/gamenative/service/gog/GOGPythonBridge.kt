@@ -1,0 +1,262 @@
+package app.gamenative.service.gog
+
+import android.content.Context
+import app.gamenative.data.DownloadInfo
+import com.chaquo.python.PyObject
+import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
+import kotlinx.coroutines.*
+import timber.log.Timber
+
+/**
+ * Progress callback that Python code can invoke to report download progress
+ */
+class ProgressCallback(private val downloadInfo: DownloadInfo) {
+    @JvmOverloads
+    fun update(percent: Float = 0f, downloadedMB: Float = 0f, totalMB: Float = 0f, downloadSpeedMBps: Float = 0f, eta: String = "") {
+        try {
+            val progress = (percent / 100.0f).coerceIn(0.0f, 1.0f)
+            downloadInfo.setProgress(progress)
+
+            if (percent > 0f) {
+                Timber.d("Download progress: %.1f%% (%.1f/%.1f MB) Speed: %.2f MB/s ETA: %s",
+                    percent, downloadedMB, totalMB, downloadSpeedMBps, eta)
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Error updating download progress")
+        }
+    }
+}
+
+/**
+ * Low-level Python execution bridge for GOGDL commands.
+ *
+ * This is a pure abstraction layer over Chaquopy Python interpreter.
+ * Contains NO business logic - just Python initialization and command execution.
+ *
+ * All GOG-specific functionality should use this bridge but NOT be implemented here.
+ */
+object GOGPythonBridge {
+    private var python: Python? = null
+    private var isInitialized = false
+
+    /**
+     * Initialize the Chaquopy Python environment
+     */
+    fun initialize(context: Context): Boolean {
+        if (isInitialized) return true
+
+        return try {
+            Timber.i("Initializing GOGPythonBridge with Chaquopy...")
+
+            if (!Python.isStarted()) {
+                Python.start(AndroidPlatform(context))
+            }
+            python = Python.getInstance()
+
+            isInitialized = true
+            Timber.i("GOGPythonBridge initialized successfully")
+            true
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to initialize GOGPythonBridge")
+            false
+        }
+    }
+
+    /**
+     * Check if Python environment is initialized
+     */
+    fun isReady(): Boolean = isInitialized && Python.isStarted()
+
+    /**
+     * Execute GOGDL command using Chaquopy
+     *
+     * This is the foundational method that all GOGDL operations use.
+     *
+     * @param args Command line arguments to pass to gogdl CLI
+     * @return Result containing command output or error
+     */
+    suspend fun executeCommand(vararg args: String): Result<String> {
+        return withContext(Dispatchers.IO) {
+            try {
+                Timber.d("executeCommand called with args: ${args.joinToString(" ")}")
+
+                if (!Python.isStarted()) {
+                    Timber.e("Python is not started! Cannot execute GOGDL command")
+                    return@withContext Result.failure(Exception("Python environment not initialized"))
+                }
+
+                val python = Python.getInstance()
+                Timber.d("Python instance obtained successfully")
+
+                val sys = python.getModule("sys")
+                val io = python.getModule("io")
+                val originalArgv = sys.get("argv")
+
+                try {
+                    // Import gogdl.cli module
+                    Timber.d("Importing gogdl.cli module...")
+                    val gogdlCli = python.getModule("gogdl.cli")
+                    Timber.d("gogdl.cli module imported successfully")
+
+                    // Set up arguments for argparse
+                    val argsList = listOf("gogdl") + args.toList()
+                    Timber.d("Setting GOGDL arguments for argparse: ${args.joinToString(" ")}")
+                    val pythonList = python.builtins.callAttr("list", argsList.toTypedArray())
+                    sys.put("argv", pythonList)
+                    Timber.d("sys.argv set to: $argsList")
+
+                    // Capture stdout
+                    val stdoutCapture = io.callAttr("StringIO")
+                    val originalStdout = sys.get("stdout")
+                    sys.put("stdout", stdoutCapture)
+                    Timber.d("stdout capture configured")
+
+                    // Execute the main function
+                    Timber.d("Calling gogdl.cli.main()...")
+                    gogdlCli.callAttr("main")
+                    Timber.d("gogdl.cli.main() completed")
+
+                    // Get the captured output
+                    val output = stdoutCapture.callAttr("getvalue").toString()
+                    Timber.d("GOGDL raw output (length: ${output.length}): $output")
+
+                    // Restore original stdout
+                    sys.put("stdout", originalStdout)
+
+                    if (output.isNotEmpty()) {
+                        Timber.d("Returning success with output")
+                        Result.success(output)
+                    } else {
+                        Timber.w("GOGDL execution completed but output is empty")
+                        Result.success("GOGDL execution completed")
+                    }
+
+                } catch (e: Exception) {
+                    Timber.e(e, "GOGDL execution exception: ${e.javaClass.simpleName} - ${e.message}")
+                    Timber.e("Exception stack trace: ${e.stackTraceToString()}")
+                    Result.failure(Exception("GOGDL execution failed: ${e.message}", e))
+                } finally {
+                    // Restore original sys.argv
+                    sys.put("argv", originalArgv)
+                    Timber.d("sys.argv restored")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to execute GOGDL command: ${args.joinToString(" ")}")
+                Timber.e("Outer exception stack trace: ${e.stackTraceToString()}")
+                Result.failure(Exception("GOGDL execution failed: ${e.message}", e))
+            }
+        }
+    }
+
+    /**
+     * Execute GOGDL command with progress callback for downloads
+     *
+     * This variant allows Python code to report progress via a callback object.
+     *
+     * @param downloadInfo DownloadInfo object to track progress
+     * @param args Command line arguments to pass to gogdl CLI
+     * @return Result containing command output or error
+     */
+    suspend fun executeCommandWithCallback(downloadInfo: DownloadInfo, vararg args: String): Result<String> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val python = Python.getInstance()
+                val sys = python.getModule("sys")
+                val originalArgv = sys.get("argv")
+
+                try {
+                    // Create progress callback that Python can invoke
+                    val progressCallback = ProgressCallback(downloadInfo)
+
+                    // Get the gogdl module and set up callback
+                    val gogdlModule = python.getModule("gogdl")
+
+                    // Try to set progress callback if gogdl supports it
+                    try {
+                        gogdlModule.put("_progress_callback", progressCallback)
+                        Timber.d("Progress callback registered with GOGDL")
+                    } catch (e: Exception) {
+                        Timber.w(e, "Could not register progress callback, will use estimation")
+                    }
+
+                    val gogdlCli = python.getModule("gogdl.cli")
+
+                    // Set up arguments for argparse
+                    val argsList = listOf("gogdl") + args.toList()
+                    Timber.d("Setting GOGDL arguments: ${args.joinToString(" ")}")
+                    val pythonList = python.builtins.callAttr("list", argsList.toTypedArray())
+                    sys.put("argv", pythonList)
+
+                    // Check for cancellation before starting
+                    ensureActive()
+
+                    // Start a simple progress estimator in case callback doesn't work
+                    val estimatorJob = CoroutineScope(Dispatchers.IO).launch {
+                        estimateProgress(downloadInfo)
+                    }
+
+                    try {
+                        // Execute the main function
+                        gogdlCli.callAttr("main")
+                        Timber.i("GOGDL execution completed successfully")
+                        Result.success("Download completed")
+                    } finally {
+                        estimatorJob.cancel()
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "GOGDL execution failed: ${e.message}")
+                    Result.failure(e)
+                } finally {
+                    sys.put("argv", originalArgv)
+                }
+            } catch (e: CancellationException) {
+                Timber.i("GOGDL command cancelled")
+                throw e // Re-throw to propagate cancellation
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to execute GOGDL command: ${args.joinToString(" ")}")
+                Result.failure(e)
+            }
+        }
+    }
+
+    /**
+     * Estimate progress when callback isn't available
+     * Shows gradual progress to indicate activity
+     */
+    private suspend fun estimateProgress(downloadInfo: DownloadInfo) {
+        try {
+            var lastProgress = 0.0f
+            val startTime = System.currentTimeMillis()
+
+            while (downloadInfo.getProgress() < 1.0f && downloadInfo.getProgress() >= 0.0f) {
+                delay(3000L) // Update every 3 seconds
+
+                val elapsed = System.currentTimeMillis() - startTime
+                val estimatedProgress = when {
+                    elapsed < 5000 -> 0.05f
+                    elapsed < 15000 -> 0.15f
+                    elapsed < 30000 -> 0.30f
+                    elapsed < 60000 -> 0.50f
+                    elapsed < 120000 -> 0.70f
+                    elapsed < 180000 -> 0.85f
+                    else -> 0.95f
+                }.coerceAtLeast(lastProgress)
+
+                // Only update if progress hasn't been set by callback
+                if (downloadInfo.getProgress() <= lastProgress + 0.01f) {
+                    downloadInfo.setProgress(estimatedProgress)
+                    lastProgress = estimatedProgress
+                    Timber.d("Estimated progress: %.1f%%", estimatedProgress * 100)
+                } else {
+                    // Callback is working, update our tracking
+                    lastProgress = downloadInfo.getProgress()
+                }
+            }
+        } catch (e: CancellationException) {
+            Timber.d("Progress estimation cancelled")
+        } catch (e: Exception) {
+            Timber.w(e, "Error in progress estimation")
+        }
+    }
+}
