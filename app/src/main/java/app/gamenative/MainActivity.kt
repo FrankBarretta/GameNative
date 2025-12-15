@@ -129,8 +129,6 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
 
-        val isRestored = savedInstanceState != null
-
         // Initialize the controller management system
         ControllerManager.getInstance().init(getApplicationContext());
 
@@ -200,6 +198,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleLaunchIntent(intent: Intent) {
+        Timber.d("[IntentLaunch]: handleLaunchIntent called with action=${intent.action}")
         try {
             val launchRequest = IntentLaunchManager.parseLaunchIntent(intent)
             if (launchRequest != null) {
