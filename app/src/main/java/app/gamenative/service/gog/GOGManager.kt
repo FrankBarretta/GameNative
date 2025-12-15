@@ -653,10 +653,18 @@ class GOGManager @Inject constructor(
             return "\"explorer.exe\""
         }
 
-        // Map game directory
-        val gogDriveLetter = ContainerUtils.ensureGOGGameDirectoryMapped(context, container, gameInstallPath)
+        // Find the drive letter that's mapped to this game's install path
+        var gogDriveLetter: String? = null
+        for (drive in com.winlator.container.Container.drivesIterator(container.drives)) {
+            if (drive[1] == gameInstallPath) {
+                gogDriveLetter = drive[0]
+                Timber.i("Found GOG game mapped to ${drive[0]}: drive")
+                break
+            }
+        }
+        
         if (gogDriveLetter == null) {
-            Timber.e("Failed to map GOG game directory")
+            Timber.e("GOG game directory not mapped to any drive: $gameInstallPath")
             return "\"explorer.exe\""
         }
 

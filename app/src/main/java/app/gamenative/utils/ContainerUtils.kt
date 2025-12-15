@@ -6,6 +6,7 @@ import app.gamenative.data.GameSource
 import app.gamenative.enums.Marker
 import app.gamenative.service.SteamService
 import app.gamenative.service.gog.GOGConstants
+import app.gamenative.service.gog.GOGService
 import app.gamenative.utils.BestConfigService
 import app.gamenative.utils.CustomGameScanner
 import com.winlator.container.Container
@@ -557,9 +558,21 @@ object ContainerUtils {
                 }
             }
             GameSource.GOG -> {
-                // For GOG games, initially use default drives
-                // The specific game directory will be mapped in getOrCreateContainer after we have game details
-                defaultDrives
+                // For GOG games, map the specific game directory to A: drive
+                val gameId = extractGameIdFromContainerId(appId)
+                val game = runBlocking { GOGService.getGOGGameOf(gameId.toString()) }
+                if (game != null) {
+                    val gameInstallPath = GOGConstants.getGameInstallPath(game.title)
+                    val drive: Char = if (defaultDrives.contains("A:")) {
+                        Container.getNextAvailableDriveLetter(defaultDrives)
+                    } else {
+                        'A'
+                    }
+                    "$defaultDrives$drive:$gameInstallPath"
+                } else {
+                    Timber.w("Could not find GOG game info for: $gameId, using default drives")
+                    defaultDrives
+                }
             }
         }
         Timber.d("Prepared container drives: $drives")
@@ -832,25 +845,49 @@ object ContainerUtils {
                 }
             }
         } else if (gameSource == GameSource.GOG) {
-            // Ensure GOG games have the GOG games directory mapped
-            val gogGamesPath = GOGConstants.defaultGOGGamesPath
-            var hasGOGDriveMapping = false
+            // Ensure GOG games have the specific game directory mapped
+            val gameId = extractGameIdFromContainerId(appId)
+            val game = runBlocking { GOGService.getGOGGameOf(gameId.toString()) }
+            if (game != null) {
+                val gameInstallPath = GOGConstants.getGameInstallPath(game.title)
+                var hasCorrectDriveMapping = false
 
-            // Check if any drive is already mapped to the GOG games directory
-            for (drive in Container.drivesIterator(container.drives)) {
-                if (drive[1] == gogGamesPath) {
-                    hasGOGDriveMapping = true
-                    break
+                // Check if the specific game directory is already mapped
+                for (drive in Container.drivesIterator(container.drives)) {
+                    if (drive[1] == gameInstallPath) {
+                        hasCorrectDriveMapping = true
+                        break
+                    }
                 }
-            }
 
-            // If GOG games directory is not mapped, add it
-            if (!hasGOGDriveMapping) {
-                val driveLetter = Container.getNextAvailableDriveLetter(container.drives)
-                val updatedDrives = "${container.drives}$driveLetter:$gogGamesPath"
-                container.drives = updatedDrives
-                container.saveData()
-                Timber.d("Updated container drives to include $driveLetter: drive mapping for GOG: $updatedDrives")
+                // If specific game directory is not mapped, add/update it
+                if (!hasCorrectDriveMapping) {
+                    val currentDrives = container.drives
+                    val drivesBuilder = StringBuilder()
+
+                    // Use A: drive for game, or next available
+                    val drive: Char = if (!currentDrives.contains("A:")) {
+                        'A'
+                    } else {
+                        Container.getNextAvailableDriveLetter(currentDrives)
+                    }
+
+                    drivesBuilder.append("$drive:$gameInstallPath")
+
+                    // Add all other drives (excluding the one we just used)
+                    for (existingDrive in Container.drivesIterator(currentDrives)) {
+                        if (existingDrive[0] != drive.toString()) {
+                            drivesBuilder.append("${existingDrive[0]}:${existingDrive[1]}")
+                        }
+                    }
+
+                    val updatedDrives = drivesBuilder.toString()
+                    container.drives = updatedDrives
+                    container.saveData()
+                    Timber.d("Updated container drives to include $drive: drive mapping for GOG game: $updatedDrives")
+                }
+            } else {
+                Timber.w("Could not find GOG game info for $gameId, skipping drive mapping update")
             }
         }
 
@@ -1122,69 +1159,6 @@ object ContainerUtils {
             // Add other platforms here..
             else -> GameSource.STEAM // default fallback
         }
-    }
-
-    /**
-     * Ensures a GOG game container has the specific game directory mapped.
-     * This should be called before launching a GOG game to isolate it from other games.
-     *
-     * @param context Android context
-     * @param container The container to update
-     * @param gameInstallPath The absolute path to the specific game's install directory
-     * @return The drive letter that is mapped to the game directory, or null if update failed
-     */
-    fun ensureGOGGameDirectoryMapped(context: Context, container: Container, gameInstallPath: String): String? {
-        Timber.i("ensureGOGGameDirectoryMapped called for container ${container.id}")
-        Timber.d("Current drives: ${container.drives}")
-        Timber.d("Target game install path: $gameInstallPath")
-        
-        // Check if this specific game directory is already mapped
-        for (drive in Container.drivesIterator(container.drives)) {
-            Timber.d("Checking drive ${drive[0]}: -> ${drive[1]}")
-            if (drive[1] == gameInstallPath) {
-                Timber.i("GOG game directory already mapped to ${drive[0]}: drive")
-                return drive[0]
-            }
-        }
-
-        // Game directory not mapped - need to add or replace mapping
-        Timber.i("Game directory not yet mapped, updating container drives")
-
-        val gogGamesPath = GOGConstants.defaultGOGGamesPath
-        val drivesBuilder = StringBuilder()
-        var replacedExistingMapping = false
-        var driveLetter: String? = null
-
-        // Iterate through existing drives and rebuild the drives string
-        for (drive in Container.drivesIterator(container.drives)) {
-            if (drive[1] == gogGamesPath) {
-                // Replace parent directory mapping with specific game directory
-                driveLetter = drive[0]
-                drivesBuilder.append("$driveLetter:$gameInstallPath")
-                replacedExistingMapping = true
-                Timber.i("Replaced parent GOG directory (${drive[1]}) with game directory ($gameInstallPath) on $driveLetter: drive")
-            } else {
-                // Keep other drive mappings as-is
-                drivesBuilder.append("${drive[0]}:${drive[1]}")
-                Timber.d("Kept existing drive mapping: ${drive[0]}: -> ${drive[1]}")
-            }
-        }
-
-        // If we didn't replace an existing mapping, add a new one
-        if (!replacedExistingMapping) {
-            driveLetter = Container.getNextAvailableDriveLetter(container.drives).toString()
-            drivesBuilder.append("$driveLetter:$gameInstallPath")
-            Timber.i("Added new drive mapping for GOG game on $driveLetter: drive (no parent mapping found)")
-        }
-
-        // Update container with new drives
-        val newDrives = drivesBuilder.toString()
-        Timber.i("Updating container drives from '${container.drives}' to '$newDrives'")
-        container.drives = newDrives
-        container.saveData()
-        Timber.i("Container drives updated and saved successfully")
-
-        return driveLetter
     }
 }
 
