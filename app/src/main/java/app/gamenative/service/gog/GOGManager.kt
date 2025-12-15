@@ -177,7 +177,7 @@ class GOGManager @Inject constructor(
      */
     private suspend fun listGames(context: Context): Result<List<GOGGame>> {
         return try {
-            Timber.i("Fetching GOG library via GOGDL...")
+            Timber.d("Fetching GOG library via GOGDL...")
             val authConfigPath = GOGAuthManager.getAuthConfigPath(context)
 
             if (!GOGAuthManager.hasStoredCredentials(context)) {
@@ -201,9 +201,6 @@ class GOGManager @Inject constructor(
         }
     }
 
-    /**
-     * Parse games from GOGDL JSON output
-     */
     private fun parseGamesFromJson(output: String): Result<List<GOGGame>> {
         return try {
             val gamesArray = org.json.JSONArray(output.trim())
@@ -263,7 +260,7 @@ class GOGManager @Inject constructor(
 
     suspend fun refreshSingleGame(gameId: String, context: Context): Result<GOGGame?> {
         return try {
-            Timber.i("Fetching single game data for gameId: $gameId")
+            Timber.d("Fetching single game data for gameId: $gameId")
             val authConfigPath = GOGAuthManager.getAuthConfigPath(context)
 
             if (!GOGAuthManager.hasStoredCredentials(context)) {
@@ -285,7 +282,6 @@ class GOGManager @Inject constructor(
                 if (gameObj.optString("id", "") == gameId) {
                     val game = parseGameObject(gameObj)
                     insertGame(game)
-                    Timber.i("Successfully fetched and inserted game: ${game.title}")
                     return Result.success(game)
                 }
             }
@@ -338,7 +334,7 @@ class GOGManager @Inject constructor(
 
                 if (result.isSuccess) {
                     downloadInfo.setProgress(1.0f)
-                    Timber.i("[Download] GOGDL download completed successfully for game $gameId")
+                    Timber.d("[Download] GOGDL download completed successfully for game $gameId")
                     Result.success(Unit)
                 } else {
                     downloadInfo.setProgress(-1.0f)
@@ -488,6 +484,7 @@ class GOGManager @Inject constructor(
         }
     }
 
+    // Get the exe. There is a v1 and v2 depending on the age of the game.
     suspend fun getInstalledExe(context: Context, libraryItem: LibraryItem): String = withContext(Dispatchers.IO) {
         val gameId = libraryItem.gameId.toString()
         try {
@@ -520,7 +517,7 @@ class GOGManager @Inject constructor(
     private fun getGameExecutable(installPath: String, gameDir: File): String {
         val mainExe = getMainExecutableFromGOGInfo(gameDir, installPath)
         if (mainExe.isNotEmpty()) {
-            Timber.i("Found GOG game executable from info file: $mainExe")
+            Timber.d("Found GOG game executable from info file: $mainExe")
             return mainExe
         }
         Timber.e("Failed to find executable from GOG info file in: ${gameDir.absolutePath}")
@@ -556,9 +553,6 @@ class GOGManager @Inject constructor(
         return ""
     }
 
-    /**
-     * Get Wine start command for launching a game
-     */
     fun getWineStartCommand(
         context: Context,
         libraryItem: LibraryItem,
@@ -602,7 +596,7 @@ class GOGManager @Inject constructor(
         for (drive in com.winlator.container.Container.drivesIterator(container.drives)) {
             if (drive[1] == gameInstallPath) {
                 gogDriveLetter = drive[0]
-                Timber.i("Found GOG game mapped to ${drive[0]}: drive")
+                Timber.d("Found GOG game mapped to ${drive[0]}: drive")
                 break
             }
         }
@@ -626,37 +620,16 @@ class GOGManager @Inject constructor(
             guestProgramLauncherComponent.workingDir = gameDir
         }
 
-        Timber.i("GOG Wine command: \"$windowsPath\"")
+        Timber.d("GOG Wine command: \"$windowsPath\"")
         return "\"$windowsPath\""
     }
 
-    /**
-     * Launch game with save sync (stub - cloud saves not implemented)
-     */
-    suspend fun launchGameWithSaveSync(
-        context: Context,
-        libraryItem: LibraryItem,
-        parentScope: CoroutineScope,
-        ignorePendingOperations: Boolean,
-        preferredSave: Int?,
-    ): PostSyncInfo = withContext(Dispatchers.IO) {
-        try {
-            Timber.i("GOG game launch for ${libraryItem.name} (cloud save sync disabled)")
-            // TODO: Implement GOG cloud save sync
-            PostSyncInfo(SyncResult.Success)
-        } catch (e: Exception) {
-            Timber.e(e, "GOG game launch exception")
-            PostSyncInfo(SyncResult.UnknownFail)
-        }
-    }
+    // TODO: Implement Cloud Saves here
 
     // ==========================================================================
     // FILE SYSTEM & PATHS
     // ==========================================================================
 
-    /**
-     * Get app directory path for a game
-     */
     fun getAppDirPath(appId: String): String {
         val gameId = ContainerUtils.extractGameIdFromContainerId(appId)
         val game = runBlocking { getGameById(gameId.toString()) }
@@ -669,32 +642,22 @@ class GOGManager @Inject constructor(
         return GOGConstants.defaultGOGGamesPath
     }
 
-    /**
-     * Get install path for a specific GOG game
-     */
     fun getGameInstallPath(context: Context, gameId: String, gameTitle: String): String {
         return GOGConstants.getGameInstallPath(gameTitle)
     }
 
-    /**
-     * Get disk size of installed game
-     */
     suspend fun getGameDiskSize(context: Context, libraryItem: LibraryItem): String = withContext(Dispatchers.IO) {
         val installPath = getGameInstallPath(context, libraryItem.appId, libraryItem.name)
         val folderSize = StorageUtils.getFolderSize(installPath)
         StorageUtils.formatBinarySize(folderSize)
     }
 
-    /**
-     * Get download size for a game
-     */
     suspend fun getDownloadSize(libraryItem: LibraryItem): String {
         val gameId = libraryItem.gameId.toString()
 
         // Return cached result if available
         downloadSizeCache[gameId]?.let { return it }
 
-        // TODO: Implement via GOGPythonBridge
         val formattedSize = "Unknown"
         downloadSizeCache[gameId] = formattedSize
         return formattedSize
