@@ -321,7 +321,7 @@ class GOGManager @Inject constructor(
                 // Initialize progress and emit download started event
                 downloadInfo.setProgress(0.0f)
                 app.gamenative.PluviaApp.events.emitJava(
-                    app.gamenative.events.AndroidEvent.DownloadStatusChanged(gameId.toLongOrNull() ?: 0L, true)
+                    app.gamenative.events.AndroidEvent.DownloadStatusChanged(gameId.toIntOrNull() ?: 0, true)
                 )
 
                 val result = GOGPythonBridge.executeCommandWithCallback(
@@ -386,10 +386,10 @@ class GOGManager @Inject constructor(
 
                     // Emit completion events
                     app.gamenative.PluviaApp.events.emitJava(
-                        app.gamenative.events.AndroidEvent.DownloadStatusChanged(gameId.toLongOrNull() ?: 0L, false)
+                        app.gamenative.events.AndroidEvent.DownloadStatusChanged(gameId.toIntOrNull() ?: 0, false)
                     )
                     app.gamenative.PluviaApp.events.emitJava(
-                        app.gamenative.events.AndroidEvent.LibraryInstallStatusChanged(gameId.toLongOrNull() ?: 0L)
+                        app.gamenative.events.AndroidEvent.LibraryInstallStatusChanged(gameId.toIntOrNull() ?: 0)
                     )
 
                     Result.success(Unit)
@@ -400,7 +400,7 @@ class GOGManager @Inject constructor(
 
                     // Emit download stopped event on failure
                     app.gamenative.PluviaApp.events.emitJava(
-                        app.gamenative.events.AndroidEvent.DownloadStatusChanged(gameId.toLongOrNull() ?: 0L, false)
+                        app.gamenative.events.AndroidEvent.DownloadStatusChanged(gameId.toIntOrNull() ?: 0, false)
                     )
 
                     Result.failure(error ?: Exception("Download failed"))
@@ -411,7 +411,7 @@ class GOGManager @Inject constructor(
 
                 // Emit download stopped event on exception
                 app.gamenative.PluviaApp.events.emitJava(
-                    app.gamenative.events.AndroidEvent.DownloadStatusChanged(gameId.toLongOrNull() ?: 0L, false)
+                    app.gamenative.events.AndroidEvent.DownloadStatusChanged(gameId.toIntOrNull() ?: 0, false)
                 )
 
                 Result.failure(e)
