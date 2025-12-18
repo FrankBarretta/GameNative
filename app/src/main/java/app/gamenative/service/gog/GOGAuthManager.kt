@@ -53,7 +53,7 @@ object GOGAuthManager {
             }
 
             // Execute GOGDL auth command with the authorization code
-            Timber.d("Authenticating with auth config path: $authConfigPath, code: ${actualCode.take(10)}...")
+            Timber.d("Authenticating with auth config path")
 
             val result = GOGPythonBridge.executeCommand(
                 "--auth-config-path", authConfigPath,
