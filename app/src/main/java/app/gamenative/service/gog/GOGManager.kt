@@ -560,42 +560,47 @@ class GOGManager @Inject constructor(
     }
 
     private fun getGameExecutable(installPath: String, gameDir: File): String {
-        val mainExe = getMainExecutableFromGOGInfo(gameDir, installPath)
-        if (mainExe.isNotEmpty()) {
-            Timber.d("Found GOG game executable from info file: $mainExe")
-            return mainExe
+        val result = getMainExecutableFromGOGInfo(gameDir, installPath)
+        if (result.isSuccess) {
+            val exe = result.getOrNull() ?: ""
+            Timber.d("Found GOG game executable from info file: $exe")
+            return exe
         }
-        Timber.e("Failed to find executable from GOG info file in: ${gameDir.absolutePath}")
+        Timber.e(result.exceptionOrNull(), "Failed to find executable from GOG info file in: ${gameDir.absolutePath}")
         return ""
     }
 
-    private fun getMainExecutableFromGOGInfo(gameDir: File, installPath: String): String {
-        val infoFile = gameDir.listFiles()?.find {
-            it.isFile && it.name.startsWith("goggame-") && it.name.endsWith(".info")
-        } ?: throw Exception("GOG info file not found")
+    private fun getMainExecutableFromGOGInfo(gameDir: File, installPath: String): Result<String> {
+        return try {
+            val infoFile = gameDir.listFiles()?.find {
+                it.isFile && it.name.startsWith("goggame-") && it.name.endsWith(".info")
+            } ?: return Result.failure(Exception("GOG info file not found in ${gameDir.absolutePath}"))
 
-        val content = infoFile.readText()
-        val jsonObject = JSONObject(content)
+            val content = infoFile.readText()
+            val jsonObject = JSONObject(content)
 
-        if (!jsonObject.has("playTasks")) {
-            throw Exception("playTasks array not found in info file")
-        }
-
-        val playTasks = jsonObject.getJSONArray("playTasks")
-        for (i in 0 until playTasks.length()) {
-            val task = playTasks.getJSONObject(i)
-            if (task.has("isPrimary") && task.getBoolean("isPrimary")) {
-                val executablePath = task.getString("path")
-                val actualExeFile = gameDir.listFiles()?.find {
-                    it.name.equals(executablePath, ignoreCase = true)
-                }
-                if (actualExeFile != null && actualExeFile.exists()) {
-                    return "${gameDir.name}/${actualExeFile.name}"
-                }
-                break
+            if (!jsonObject.has("playTasks")) {
+                return Result.failure(Exception("playTasks array not found in ${infoFile.name}"))
             }
+
+            val playTasks = jsonObject.getJSONArray("playTasks")
+            for (i in 0 until playTasks.length()) {
+                val task = playTasks.getJSONObject(i)
+                if (task.has("isPrimary") && task.getBoolean("isPrimary")) {
+                    val executablePath = task.getString("path")
+                    val actualExeFile = gameDir.listFiles()?.find {
+                        it.name.equals(executablePath, ignoreCase = true)
+                    }
+                    if (actualExeFile != null && actualExeFile.exists()) {
+                        return Result.success("${gameDir.name}/${actualExeFile.name}")
+                    }
+                    return Result.failure(Exception("Primary executable '$executablePath' not found in ${gameDir.absolutePath}"))
+                }
+            }
+            Result.failure(Exception("No primary executable found in playTasks"))
+        } catch (e: Exception) {
+            Result.failure(Exception("Error parsing GOG info file in ${gameDir.absolutePath}: ${e.message}", e))
         }
-        return ""
     }
 
     fun getWineStartCommand(
