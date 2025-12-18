@@ -218,7 +218,7 @@ object GOGAuthManager {
             if (authFile.exists()) {
                 // Parse authentication result from file
                 val authData = parseFullCredentialsFromFile(authConfigPath)
-                Timber.i("GOG authentication successful for user: ${authData.username}")
+                Timber.i("GOG authentication successful for user")
                 return Result.success(authData)
             }
 
@@ -237,7 +237,7 @@ object GOGAuthManager {
             }
             try {
                 val authData = parseFullCredentialsFromFile(authConfigPath)
-                Timber.i("GOG authentication successful (fallback) for user: ${authData.username}")
+                Timber.i("GOG authentication successful (fallback) for user")
                 return Result.success(authData)
             } catch (ex: Exception) {
                 Timber.e(ex, "Failed to parse auth file")
