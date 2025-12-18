@@ -936,7 +936,8 @@
     <!-- GOG Login Dialog -->
     <string name="gog_login_title">Sign in to GOG</string>
     <string name="gog_login_instruction">Sign in with your GOG account:</string>
-    <string name="gog_login_auto_auth_info">Tap \'Open GOG Login\' and sign in. Once logged in, please take the token from the success URL and paste it below</string>
+    <string name="gog_login_auto_auth_info">Tap \'Open GOG Login\' and sign in. Once logged in, please take the code from the success URL and paste it below</string>
+    <string name="gog_login_auth_example">Example: https://embed.gog.com/on_login_success?origin=client&amp;code=COPY_THIS_CODE</string>
     <string name="gog_login_open_button">Open GOG Login</string>
     <string name="gog_login_manual_entry">Paste your code below</string>
     <string name="gog_login_auth_code_label">Authorization Code</string>

@@ -92,6 +92,11 @@ fun GOGLoginDialog(
 
                     // Manual code entry fallback
                     Text(
+                        text = stringResource(R.string.gog_login_auth_example),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
                         text = stringResource(R.string.gog_login_manual_entry),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
