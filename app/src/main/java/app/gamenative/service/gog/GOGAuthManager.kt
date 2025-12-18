@@ -182,7 +182,7 @@ object GOGAuthManager {
             } else {
                 // Remove any additional parameters after the code
                 val cleanCode = codeParam.substringBefore("&")
-                Timber.d("Extracted authorization code from URL: ${cleanCode.take(20)}...")
+                Timber.d("Extracted authorization code")
                 cleanCode
             }
         } else {
