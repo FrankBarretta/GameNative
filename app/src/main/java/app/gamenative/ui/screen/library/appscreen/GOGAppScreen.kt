@@ -113,7 +113,22 @@ class GOGAppScreen : BaseAppScreen() {
         Timber.tag(TAG).d("getGameDisplayInfo: appId=${libraryItem.appId}, name=${libraryItem.name}")
         // For GOG games, appId is already the numeric game ID (no prefix)
         val gameId = libraryItem.appId
-        val gogGame = remember(gameId) {
+
+        // Add a refresh trigger to re-fetch game data when install status changes
+        var refreshTrigger by remember { mutableStateOf(0) }
+
+        // Listen for install status changes to refresh game data
+        LaunchedEffect(gameId) {
+            val installListener: (app.gamenative.events.AndroidEvent.LibraryInstallStatusChanged) -> Unit = { event ->
+                if (event.appId == libraryItem.gameId) {
+                    Timber.tag(TAG).d("Install status changed, refreshing game data for $gameId")
+                    refreshTrigger++
+                }
+            }
+            app.gamenative.PluviaApp.events.on<app.gamenative.events.AndroidEvent.LibraryInstallStatusChanged, Unit>(installListener)
+        }
+
+        val gogGame = remember(gameId, refreshTrigger) {
             val game = GOGService.getGOGGameOf(gameId)
             if (game != null) {
                 Timber.tag(TAG).d("""
@@ -158,14 +173,32 @@ class GOGAppScreen : BaseAppScreen() {
             formatBytes(game.downloadSize)
         } else null
 
+        // Parse GOG's ISO 8601 release date string to Unix timestamp
+        // GOG returns dates like "2022-08-18T17:50:00+0300" (without colon in timezone)
+        // GameDisplayInfo expects Unix timestamp in SECONDS, not milliseconds
+        val releaseDateTimestamp = if (game?.releaseDate?.isNotEmpty() == true) {
+            try {
+                val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssZ")
+                val timestampMillis = java.time.ZonedDateTime.parse(game.releaseDate, formatter).toInstant().toEpochMilli()
+                val timestampSeconds = timestampMillis / 1000
+                Timber.tag(TAG).d("Parsed release date '${game.releaseDate}' -> $timestampSeconds seconds (${java.util.Date(timestampMillis)})")
+                timestampSeconds
+            } catch (e: Exception) {
+                Timber.tag(TAG).w(e, "Failed to parse release date: ${game.releaseDate}")
+                0L
+            }
+        } else {
+            0L
+        }
+
         val displayInfo = GameDisplayInfo(
             name = game?.title ?: libraryItem.name,
             iconUrl = game?.iconUrl ?: libraryItem.iconHash,
             heroImageUrl = game?.imageUrl ?: game?.iconUrl ?: libraryItem.iconHash,
             gameId = libraryItem.gameId,  // Use gameId property which handles conversion
             appId = libraryItem.appId,
-            releaseDate = 0L, // GOG uses string release dates, would need parsing
-            developer = game?.developer ?: "Unknown",
+            releaseDate = releaseDateTimestamp,
+            developer = game?.developer?.takeIf { it.isNotEmpty() } ?: "",  // GOG API doesn't provide this
             installLocation = game?.installPath?.takeIf { it.isNotEmpty() },
             sizeOnDisk = sizeOnDisk,
             sizeFromStore = sizeFromStore
