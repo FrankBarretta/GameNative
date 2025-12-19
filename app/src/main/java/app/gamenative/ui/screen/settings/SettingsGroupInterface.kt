@@ -103,25 +103,12 @@ private suspend fun handleGogAuthentication(
         if (result.isSuccess) {
             Timber.i("[SettingsGOG]: ✓ Authentication successful!")
 
-            // Start GOGService before syncing so service is running for operations
-            Timber.i("[SettingsGOG]: Starting GOGService")
+            // Start GOGService which will automatically trigger background library sync
+            Timber.i("[SettingsGOG]: Starting GOGService (will sync library in background)")
             GOGService.start(context)
 
-            // Sync the library using refreshLibrary which handles database updates
-            Timber.i("[SettingsGOG]: Syncing GOG library...")
-            val syncResult = GOGService.refreshLibrary(context)
-
-            if (syncResult.isSuccess) {
-                val count = syncResult.getOrNull() ?: 0
-                Timber.i("[SettingsGOG]: ✓ Synced $count games from GOG library")
-                onSuccess(count)
-            } else {
-                val error = syncResult.exceptionOrNull()?.message ?: "Failed to sync library"
-                Timber.w("[SettingsGOG]: Failed to sync library: $error")
-                // Don't fail authentication if library sync fails
-                onSuccess(0)
-            }
-
+            // Authentication succeeded - service will handle library sync in background
+            onSuccess(0)
             onLoadingChange(false)
             onDialogClose()
         } else {
