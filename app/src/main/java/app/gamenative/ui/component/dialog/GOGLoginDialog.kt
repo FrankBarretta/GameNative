@@ -20,11 +20,6 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 
-/**
- * Extract authorization code from various input formats:
- * - Full URL: https://embed.gog.com/on_login_success?origin=client&code=ABC123...
- * - Just code: ABC123...
- */
 private fun extractCodeFromInput(input: String): String {
     val trimmed = input.trim()
     // Check if it's a URL with code parameter
