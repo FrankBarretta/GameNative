@@ -943,7 +943,7 @@
     <string name="gog_settings_sync_subtitle_success">✓ Synced %1$d games</string>
     <string name="gog_settings_sync_subtitle_default">Fetch your GOG games library</string>
     <string name="gog_login_success_title">Login Successful</string>
-    <string name="gog_login_success_message">You are now signed in to GOG.</string>
+    <string name="gog_login_success_message">You are now signed in to GOG.\nWe will now sync your library in the background.</string>
 
     <!-- GOG Login Dialog -->
     <string name="gog_login_title">Sign in to GOG</string>
