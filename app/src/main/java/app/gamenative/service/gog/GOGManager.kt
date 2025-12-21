@@ -162,30 +162,32 @@ class GOGManager @Inject constructor(
             }
 
             var totalProcessed = 0
-            
-            for(id in gameIds) { 
-                val singleGameResult = refreshSingleGame(id, context)
-                if(singleGameResult.isSuccess){
-                    val authConfigPath = GOGAuthManager.getAuthConfigPath(context)
-                    val result = GOGPythonBridge.executeCommand("--auth-config-path", authConfigPath, "game-details", "--pretty")
-                    if(result != null){
-                        Timer.tag("GOG").i("Got Game Details for ID: $id")
-                        var game = parseGameObject(result)
-                        insertGame(game)
-                        Timber.tag("GOG").i("Refreshed GOG game ID $id: ${game.title}")
-                        totalProcessed++
-                    } else {
-                        Timber.w("GOG game ID $id not found in library after refresh")
-                    }
+
+            Timber.tag("GOG").i("Getting Game Details for GOG Games...")
+            for(id in gameIds) {
+                val authConfigPath = GOGAuthManager.getAuthConfigPath(context)
+                val result = GOGPythonBridge.executeCommand("--auth-config-path", authConfigPath, "game-details", "--game_id", id, "--pretty")
+                val output = result.getOrNull() ?: ""
+                if(result != null){
+                    Timber.tag("GOG").i("Got Game Details for ID: $id")
+                    val gameDetails = org.json.JSONObject(output.trim())
+                    var game = parseGameObject(gameDetails)
+                    gogGameDao.upsertSingleGamePreservingInstallStatus(game)
+                    Timber.tag("GOG").i("Refreshed GOG game ID $id: ${game.title}")
+                    totalProcessed++
                 } else {
-                    val error = singleGameResult.exceptionOrNull()
-                    Timber.e(error, "Failed to refresh single GOG game ID $id: ${error?.message}")
+                    Timber.w("GOG game ID $id not found in library after refresh")
                 }
+            }
+            val detectedCount = detectAndUpdateExistingInstallations()
+            if (detectedCount > 0) {
+                Timber.i("Detected and updated $detectedCount existing installations")
             }
             Timber.tag("GOG").i("Successfully refreshed GOG library with $totalProcessed games")
             return@withContext Result.success(totalProcessed)
         } catch (e: Exception) {
             Timber.e(e, "Failed to refresh GOG library")
+            return@withContext Result.failure(e)
         }
     }
 
@@ -231,12 +233,25 @@ class GOGManager @Inject constructor(
           }
 
             val result = GOGPythonBridge.executeCommand("--auth-config-path", authConfigPath, "game-ids")
-            val data = result.getOrNull()
 
-            val gameIds = JSONArray(data);
-            
-            Timber.tag("GOG").i("Result::: $result")
-            return Result.success(listOf(gameIds))
+            if (result.isFailure) {
+                val error = result.exceptionOrNull()
+                Timber.e(error, "Failed to fetch GOG game IDs")
+                return Result.failure(error ?: Exception("Failed to fetch GOG game IDs"))
+            }
+
+            val output = result.getOrNull() ?: ""
+
+            if (output.isBlank()) {
+                Timber.w("Empty response when fetching GOG game IDs")
+                return Result.failure(Exception("Empty response from GOGDL"))
+            }
+
+            val gamesArray = org.json.JSONArray(output.trim())
+            val gameIds = List(gamesArray.length()) { gamesArray.getString(it) }
+            Timber.tag("GOG").i("Successfully fetched ${gameIds.size} game IDs")
+
+            return Result.success(gameIds)
     }
 
 
