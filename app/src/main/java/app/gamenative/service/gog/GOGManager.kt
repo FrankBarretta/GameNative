@@ -475,23 +475,19 @@ class GOGManager @Inject constructor(
                 return Result.failure(Exception("Not authenticated"))
             }
 
-            val result = GOGPythonBridge.executeCommand("--auth-config-path", authConfigPath, "list", "--pretty")
+            val result = GOGPythonBridge.executeCommand("--auth-config-path", authConfigPath, "game-details", "--game_id", gameId, "--pretty")
 
             if (result.isFailure) {
                 return Result.failure(result.exceptionOrNull() ?: Exception("Failed to fetch game data"))
             }
 
             val output = result.getOrNull() ?: ""
-            val gamesArray = org.json.JSONArray(output.trim())
 
-            // Find the game with matching ID
-            for (i in 0 until gamesArray.length()) {
-                val gameObj = gamesArray.getJSONObject(i)
-                if (gameObj.optString("id", "") == gameId) {
-                    val game = parseGameObject(gameObj)
-                    insertGame(game)
-                    return Result.success(game)
-                }
+            if(result != null){
+                val gameDetails = org.json.JSONObject(output.trim())
+                var game = parseGameObject(gameDetails)
+                insertGame(game)
+                return Result.success(game)
             }
 
             Timber.w("Game $gameId not found in GOG library")
