@@ -102,6 +102,7 @@ class LibraryViewModel @Inject constructor(
                 if (appList.size != apps.size) {
                     // Don't filter if it's no change
                     appList = apps
+                    onFilterApps(paginationCurrentPage)
                 }
             }
         }
