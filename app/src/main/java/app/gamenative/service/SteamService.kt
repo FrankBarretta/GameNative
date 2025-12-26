@@ -39,6 +39,8 @@ import app.gamenative.enums.SyncResult
 import app.gamenative.events.AndroidEvent
 import app.gamenative.events.SteamEvent
 import app.gamenative.utils.SteamUtils
+import app.gamenative.utils.MarkerUtils
+import app.gamenative.enums.Marker
 import app.gamenative.utils.generateSteamApp
 import com.winlator.xenvironment.ImageFs
 import dagger.hilt.android.AndroidEntryPoint
@@ -128,9 +130,6 @@ import java.lang.NullPointerException
 import app.gamenative.data.AppInfo
 import app.gamenative.db.dao.AppInfoDao
 import kotlinx.coroutines.ensureActive
-import app.gamenative.enums.Marker
-import app.gamenative.utils.FileUtils
-import app.gamenative.utils.MarkerUtils
 import app.gamenative.utils.LicenseSerializer
 import app.gamenative.data.CachedLicense
 import com.winlator.container.Container
@@ -432,16 +431,24 @@ class SteamService : Service(), IChallengeUrlChanged {
             return runBlocking(Dispatchers.IO) { instance?.appDao?.findApp(appId) }
         }
 
+        fun getDownloadableDlcAppsOf(appId: Int): List<SteamApp>? {
+            return runBlocking(Dispatchers.IO) { instance?.appDao?.findDownloadableDLCApps(appId) }
+        }
+
         fun getHiddenDlcAppsOf(appId: Int): List<SteamApp>? {
             return runBlocking(Dispatchers.IO) { instance?.appDao?.findHiddenDLCApps(appId) }
         }
 
-        fun getInstalledDepotsOf(appId: Int): List<Int>? {
-            return runBlocking(Dispatchers.IO) { instance?.appInfoDao?.getInstalledDepots(appId)?.downloadedDepots }
+        fun getInstalledApp(appId: Int): AppInfo? {
+            return runBlocking(Dispatchers.IO) { instance?.appInfoDao?.getInstalledApp(appId) }
         }
 
-        fun getDlcDepotsOf(appId: Int): List<Int>? {
-            return runBlocking(Dispatchers.IO) { instance?.appInfoDao?.getInstalledDepots(appId)?.dlcDepots }
+        fun getInstalledDepotsOf(appId: Int): List<Int>? {
+            return getInstalledApp(appId)?.downloadedDepots
+        }
+
+        fun getInstalledDlcDepotsOf(appId: Int): List<Int>? {
+            return getInstalledApp(appId)?.dlcDepots
         }
 
         fun getAppDownloadInfo(appId: Int): DownloadInfo? {
@@ -470,7 +477,8 @@ class SteamService : Service(), IChallengeUrlChanged {
                     depot.dlcAppId == INVALID_APP_ID -> true
 
                     /* Optional DLC depots are skipped */
-                    depot.optionalDlcId == depot.dlcAppId -> false
+                    /* This line is commented out because game manager will now handle those optional DLCs */
+                    //depot.optionalDlcId == depot.dlcAppId -> false
 
                     /* ① licence cache */
                     instance?.licenseDao?.findLicense(depot.dlcAppId) != null -> true
@@ -524,6 +532,58 @@ class SteamService : Service(), IChallengeUrlChanged {
             }.getOrDefault(0)
         }
 
+        /**
+         * Common Filter for downloadable depots
+         */
+        fun filterForDownloadableDepots(depot: DepotInfo, has64Bit: Boolean, preferredLanguage: String, ownedDlc: Map<Int, DepotInfo>?): Boolean {
+            if (depot.manifests.isEmpty() && depot.encryptedManifests.isNotEmpty())
+                return false
+            // 1. Has something to download
+            if (depot.manifests.isEmpty() && !depot.sharedInstall)
+                return false
+            // 2. Supported OS
+            if (!(depot.osList.contains(OS.windows) ||
+                        (!depot.osList.contains(OS.linux) && !depot.osList.contains(OS.macos)))
+            )
+                return false
+            // 3. 64-bit or indeterminate
+            // Arch selection: allow 64-bit and Unknown always.
+            // Allow 32-bit only when no 64-bit depot exists.
+            val archOk = when (depot.osArch) {
+                OSArch.Arch64, OSArch.Unknown -> true
+                OSArch.Arch32 -> !has64Bit
+                else -> false
+            }
+            if (!archOk) return false
+            // 4. DLC you actually own
+            if (depot.dlcAppId != INVALID_APP_ID && ownedDlc != null && !ownedDlc.containsKey(depot.depotId))
+                return false
+            // 5. Language filter - if depot has language, it must match preferred language
+            if (depot.language.isNotEmpty() && depot.language != preferredLanguage)
+                return false
+
+            return true
+        }
+
+        fun getMainAppDepots(appId: Int): Map<Int, DepotInfo> {
+            val appInfo = getAppInfoOf(appId) ?: return emptyMap()
+            val ownedDlc = runBlocking { getOwnedAppDlc(appId) }
+            val preferredLanguage = PrefManager.containerLanguage
+
+            // If the game ships any 64-bit depot, prefer those and ignore x86 ones
+            val has64Bit = appInfo.depots.values.any { it.osArch == OSArch.Arch64 }
+
+            return appInfo.depots.asSequence()
+                .filter { (depotId, depot) ->
+                    return@filter filterForDownloadableDepots(depot, has64Bit, preferredLanguage, ownedDlc)
+                }
+                .associate { it.toPair() }
+        }
+
+        /**
+         * Get downloadable depots for a given app, including all DLCs
+         * @return Map of app ID to depot ID to depot info
+         */
         fun getDownloadableDepots(appId: Int): Map<Int, DepotInfo> {
             val appInfo = getAppInfoOf(appId) ?: return emptyMap()
             val ownedDlc = runBlocking { getOwnedAppDlc(appId) }
@@ -532,38 +592,40 @@ class SteamService : Service(), IChallengeUrlChanged {
             // If the game ships any 64-bit depot, prefer those and ignore x86 ones
             val has64Bit = appInfo.depots.values.any { it.osArch == OSArch.Arch64 }
 
-            return appInfo.depots
+            val map = appInfo.depots
                 .asSequence()
-                .filter { (_, depot) ->
-                    if (depot.manifests.isEmpty() && depot.encryptedManifests.isNotEmpty())
-                        return@filter false
-                    // 1. Has something to download
-                    if (depot.manifests.isEmpty() && !depot.sharedInstall)
-                        return@filter false
-                    // 2. Supported OS
-                    if (!(depot.osList.contains(OS.windows) ||
-                                (!depot.osList.contains(OS.linux) && !depot.osList.contains(OS.macos)))
-                    )
-                        return@filter false
-                    // 3. 64-bit or indeterminate
-                    // Arch selection: allow 64-bit and Unknown always.
-                    // Allow 32-bit only when no 64-bit depot exists.
-                    val archOk = when (depot.osArch) {
-                        OSArch.Arch64, OSArch.Unknown -> true
-                        OSArch.Arch32 -> !has64Bit
-                        else -> false
-                    }
-                    if (!archOk) return@filter false
-                    // 4. DLC you actually own
-                    if (depot.dlcAppId != INVALID_APP_ID && !ownedDlc.containsKey(depot.depotId))
-                        return@filter false
-                    // 5. Language filter - if depot has language, it must match preferred language
-                    if (depot.language.isNotEmpty() && depot.language != preferredLanguage)
-                        return@filter false
-
-                    true
+                .filter { (depotId, depot) ->
+                    return@filter filterForDownloadableDepots(depot, has64Bit, preferredLanguage, ownedDlc)
                 }
                 .associate { it.toPair() }
+                .toMutableMap()
+
+            val indirectDlcApps = getDownloadableDlcAppsOf(appId).orEmpty()
+            indirectDlcApps.forEach { dlcApp ->
+                dlcApp.depots
+                    .asSequence()
+                    .filter { (depotId, depot) ->
+                        return@filter filterForDownloadableDepots(depot, has64Bit, preferredLanguage, null)
+                    }
+                    .associate { it.toPair() }
+                    .forEach { (depotId, depot) ->
+                        // Add DLC Depots with custom object
+                        map[depotId] = DepotInfo(
+                            depotId = depot.depotId,
+                            dlcAppId = dlcApp.id, // Set to DLC App ID
+                            optionalDlcId = depot.optionalDlcId,
+                            depotFromApp = depot.depotFromApp,
+                            sharedInstall = depot.sharedInstall,
+                            osList = depot.osList,
+                            osArch = depot.osArch,
+                            language = depot.language,
+                            manifests = depot.manifests,
+                            encryptedManifests = depot.encryptedManifests,
+                        )
+                    }
+            }
+
+            return map
         }
 
         fun getAppDirName(app: SteamApp?): String {
@@ -818,14 +880,20 @@ class SteamService : Service(), IChallengeUrlChanged {
         }
 
         fun downloadApp(appId: Int): DownloadInfo? {
+            val currentDownloadInfo = downloadJobs[appId]
+            return downloadApp(appId, currentDownloadInfo?.dlcAppIds ?: emptyList())
+        }
+
+        fun downloadApp(appId: Int, dlcAppIds: List<Int>): DownloadInfo? {
             // Enforce Wi-Fi-only downloads
             if (PrefManager.downloadOnWifiOnly && instance?.isWifiConnected == false) {
                 instance?.notificationHelper?.notify("Not connected to Wi‑Fi/LAN")
                 return null
             }
             return getAppInfoOf(appId)?.let { appInfo ->
-                Timber.i("App contains ${appInfo.depots.size} depot(s): ${appInfo.depots.keys}")
-                downloadApp(appId, getDownloadableDepots(appId).keys.toList(), "public")
+                val depots = getDownloadableDepots(appId)
+                Timber.i("App contains ${depots.size} depot(s): ${depots.keys}")
+                downloadApp(appId, depots, dlcAppIds, "public")
             }
         }
 
@@ -986,36 +1054,45 @@ class SteamService : Service(), IChallengeUrlChanged {
 
         fun downloadApp(
             appId: Int,
-            depotIds: List<Int>,
+            depots: Map<Int, DepotInfo>,
+            dlcAppIds: List<Int>,
             branch: String,
         ): DownloadInfo? {
-            Timber.d("Attempting to download " + appId + " with depotIds " + depotIds)
+            Timber.d("Attempting to download " + appId + " with depotIds " + depots.keys)
             // Enforce Wi-Fi-only downloads
             if (PrefManager.downloadOnWifiOnly && instance?.isWifiConnected == false) {
                 instance?.notificationHelper?.notify("Not connected to Wi‑Fi/LAN")
                 return null
             }
             if (downloadJobs.contains(appId)) return getAppDownloadInfo(appId)
-            Timber.d("depotIds is empty? " + depotIds.isEmpty())
-            if (depotIds.isEmpty()) return null
+            Timber.d("depots is empty? " + depots.isEmpty())
+            if (depots.isEmpty()) return null
 
-            val entitledDepotIds = depotIds.sorted()
+            // Filter out DLC depots
+            val mainAppDepots = getMainAppDepots(appId).filter { (_, depot) ->
+                depot.dlcAppId == INVALID_APP_ID && // Main App
+                !dlcAppIds.contains(depot.dlcAppId)
+            }
 
-            Timber.i("entitledDepotIds is empty? " + entitledDepotIds.isEmpty())
+            // Filter out main app depots
+            val dlcAppDepots = depots.filter { (_, depot) ->
+                dlcAppIds.contains(depot.dlcAppId)
+            }
 
-            if (entitledDepotIds.isEmpty()) return null
+            // Combine main app and DLC depots
+            val selectedDepots = mainAppDepots + dlcAppDepots
+
+            Timber.i("selectedDepots is empty? " + selectedDepots.isEmpty())
+
+            if (selectedDepots.isEmpty()) return null
 
             Timber.i("Starting download for $appId")
 
-            // Create mapping from depotId to index for progress tracking
-            val depotIdToIndex = entitledDepotIds.mapIndexed { index, depotId -> depotId to index }.toMap()
-
             val appDirPath = getAppDirPath(appId)
-            val info = DownloadInfo(entitledDepotIds.size).also { di ->
+            val info = DownloadInfo(selectedDepots.size, dlcAppIds).also { di ->
                 di.setPersistencePath(appDirPath)
                 // Set weights for each depot based on manifest sizes
-                val sizes = entitledDepotIds.map { depotId ->
-                    val depot = getAppInfoOf(appId)!!.depots[depotId]!!
+                val sizes = selectedDepots.map { (_, depot) ->
                     val mInfo = depot.manifests[branch]
                         ?: depot.encryptedManifests[branch]
                         ?: return@map 1L
@@ -1090,19 +1167,45 @@ class SteamService : Service(), IChallengeUrlChanged {
                             parentJob = coroutineContext[Job]
                         )
 
+                        // Create mapping from depotId to index for progress tracking
+                        val mainAppDepotIds = mainAppDepots.keys.sorted()
+                        val mainAppDepotIdToIndex = mainAppDepotIds.mapIndexed { index, depotId -> depotId to index }.toMap()
+
                         // Create listener
-                        val listener = AppDownloadListener(di, depotIdToIndex, appId, entitledDepotIds, appDirPath)
-                        depotDownloader.addListener(listener)
+                        val mainAppListener = AppDownloadListener(di, mainAppDepotIdToIndex, appId, mainAppDepotIds, appDirPath)
+                        depotDownloader.addListener(mainAppListener)
 
                         // Create AppItem with only mandatory appId
-                        val appItem = AppItem(
+                        val mainAppItem = AppItem(
                             appId,
                             installDirectory = getAppDirPath(appId),
-                            depot = entitledDepotIds,
+                            depot = mainAppDepotIds,
                         )
 
                         // Add item to downloader
-                        depotDownloader.add(appItem)
+                        depotDownloader.add(mainAppItem)
+
+                        // Create listeners for DLC apps
+                        val dlcListeners = ArrayList<AppDownloadListener>()
+
+                        // Create AppItem for each DLC app
+                        dlcAppIds.forEach { dlcAppId ->
+                            val dlcDepots = selectedDepots.filter { it.value.dlcAppId == dlcAppId }
+                            val dlcDepotIds = dlcDepots.keys.sorted()
+                            val dlcAppDepotIdToIndex = dlcDepots.keys.sorted().mapIndexed { index, depotId -> depotId to index }.toMap()
+
+                            val dlcAppListener = AppDownloadListener(di, dlcAppDepotIdToIndex, dlcAppId, dlcDepotIds, appDirPath)
+                            depotDownloader.addListener(dlcAppListener)
+                            dlcListeners.add(dlcAppListener)
+
+                            val dlcAppItem = AppItem(
+                                dlcAppId,
+                                installDirectory = getAppDirPath(appId),
+                                depot = dlcDepotIds
+                            )
+
+                            depotDownloader.add(dlcAppItem)
+                        }
 
                         // Signal that no more items will be added
                         depotDownloader.finishAdding()
@@ -1113,7 +1216,10 @@ class SteamService : Service(), IChallengeUrlChanged {
                         depotDownloader.getCompletion().await()
 
                         // Remove listener
-                        depotDownloader.removeListener(listener)
+                        depotDownloader.removeListener(mainAppListener)
+
+                        // Remove dlc listeners
+                        dlcListeners.forEach { depotDownloader.removeListener(it) }
 
                         // Close the downloader
                         depotDownloader.close()
@@ -1121,7 +1227,7 @@ class SteamService : Service(), IChallengeUrlChanged {
                         Timber.e(e, "Download failed for app $appId")
                         di.persistProgressSnapshot()
                         // Mark all depots as failed
-                        entitledDepotIds.forEachIndexed { idx, _ ->
+                        selectedDepots.keys.sorted().forEachIndexed { idx, _ ->
                             di.setWeight(idx, 0)
                             di.setProgress(1f, idx)
                         }
