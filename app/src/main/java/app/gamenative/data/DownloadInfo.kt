@@ -9,6 +9,8 @@ import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 
 data class DownloadInfo(
+    val gameId: Int,
+    var downloadingAppIds: CopyOnWriteArrayList<Int>,
     val jobCount: Int = 1,
 ) {
     private var downloadJob: Job? = null
@@ -32,13 +34,21 @@ data class DownloadInfo(
     private val statusMessage = MutableStateFlow<String?>(null)
 
     fun cancel() {
+        cancel("Cancelled by user")
+    }
+
+    fun failedToDownload() {
+        cancel("Failed to download")
+    }
+
+    fun cancel(message: String) {
         // Persist the most recent progress so a resume can pick up where it left off.
         persistProgressSnapshot()
         // Mark as inactive and clear speed tracking so a future resume
         // does not use stale samples.
         setActive(false)
         resetSpeedTracking()
-        downloadJob?.cancel(CancellationException("Cancelled by user"))
+        downloadJob?.cancel(CancellationException(message))
     }
 
     fun setDownloadJob(job: Job) {
