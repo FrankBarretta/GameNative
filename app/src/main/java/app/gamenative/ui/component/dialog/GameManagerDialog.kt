@@ -113,10 +113,6 @@ fun GameManagerDialog(
         // Get Downloadable Depots
         downloadableDepots.putAll(SteamService.getDownloadableDepots(gameId))
 
-        // Add Base Game
-        allDownloadableApps.add(Pair(gameId, downloadableDepots.toSortedMap().values.first()))
-        selectedAppIds.put(gameId, true)
-
         // Add DLCs
         downloadableDepots
             .toSortedMap()
@@ -128,10 +124,14 @@ fun GameManagerDialog(
                 .toMap()
             .forEach { (_, depotInfo) ->
                 allDownloadableApps.add(Pair(depotInfo.dlcAppId, depotInfo))
-                selectedAppIds.put(depotInfo.dlcAppId,
-                    !indirectDlcAppIds.contains(depotInfo.dlcAppId) || installedDlcIds.contains(depotInfo.dlcAppId))
+                selectedAppIds[depotInfo.dlcAppId] = !indirectDlcAppIds.contains(depotInfo.dlcAppId) || installedDlcIds.contains(depotInfo.dlcAppId)
             }
 
+        allDownloadableApps.sortBy { it.first }
+
+        // Add Base Game
+        allDownloadableApps.add(0, Pair(gameId, downloadableDepots.toSortedMap().values.first()))
+        selectedAppIds[gameId] = true
     }
 
     fun getDepotAppName(depotInfo: DepotInfo): String {
