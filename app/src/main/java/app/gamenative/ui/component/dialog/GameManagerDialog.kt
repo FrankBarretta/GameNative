@@ -3,6 +3,7 @@ package app.gamenative.ui.component.dialog
 import android.content.Context
 import android.content.res.Configuration
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -318,26 +320,19 @@ fun GameManagerDialog(
                                 // Disable selection if DLC is not downloadable or it is already installed
                                 val enabled = dlcAppId != gameId &&
                                                 !installedDlcIds.contains(dlcAppId)
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 8.dp, start = 16.dp, bottom = 8.dp, end = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        modifier = Modifier.weight(0.9f),
-                                        text = getDepotAppName(depotInfo) +
-                                                (if (BuildConfig.DEBUG) {
-                                                    "\ndepotId: " + depotInfo.depotId + ", dlcAppId: " + depotInfo.dlcAppId
-                                                } else {
-                                                    ""
-                                                })
-                                    )
-                                    Row(
-                                        modifier = Modifier.weight(0.1f),
-                                        horizontalArrangement = Arrangement.End,
-                                    ) {
+
+                                ListItem(
+                                    headlineContent = {
+                                        Text(
+                                            text = getDepotAppName(depotInfo) /*+
+                                                    (if (BuildConfig.DEBUG) {
+                                                        "\ndepotId: " + depotInfo.depotId + ", dlcAppId: " + depotInfo.dlcAppId
+                                                    } else {
+                                                        ""
+                                                    })*/
+                                        )
+                                    },
+                                    trailingContent = {
                                         Checkbox(
                                             checked = checked,
                                             enabled = enabled,
@@ -346,8 +341,12 @@ fun GameManagerDialog(
                                                 selectedAppIds[dlcAppId] = isChecked
                                             }
                                         )
+                                    },
+                                    modifier = Modifier.clickable(enabled = enabled) {
+                                        // Toggle checkbox when ListItem is clicked
+                                        selectedAppIds[dlcAppId] = !checked
                                     }
-                                }
+                                )
                             }
                         }
 
