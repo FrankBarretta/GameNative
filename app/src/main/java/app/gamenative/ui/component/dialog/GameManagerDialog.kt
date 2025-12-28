@@ -44,6 +44,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import app.gamenative.BuildConfig
 import app.gamenative.R
 import app.gamenative.data.DepotInfo
 import app.gamenative.service.SteamService
@@ -83,21 +84,16 @@ fun GameManagerDialog(
     val downloadableDepots = remember { mutableStateMapOf<Int, DepotInfo>() }
     val allDownloadableApps = remember { mutableStateListOf<Pair<Int, DepotInfo>>() }
     val selectedAppIds = remember { mutableStateMapOf<Int, Boolean>() }
+    val enabledAppIds = remember { mutableStateMapOf<Int, Boolean>() }
 
     val displayInfo = onGetDisplayInfo(context)
     val gameId = displayInfo.gameId
 
-    val appInfo = SteamService.getAppInfoOf(gameId)!!
     val installedApp = SteamService.getInstalledApp(gameId)
     val installedDlcIds = installedApp?.dlcDepots.orEmpty()
 
     val indirectDlcAppIds = remember(gameId) {
         SteamService.getDownloadableDlcAppsOf(gameId).orEmpty().map { it.id }
-    }
-
-    // Filter out DLCs that are not in the appInfo, this can happen for DLCs that are not in the appInfo
-    val hiddenDlcIds = remember(gameId, appInfo) {
-        SteamService.getHiddenDlcAppsOf(gameId).orEmpty().map { it.id }.filter { id -> appInfo.depots[id] == null }
     }
 
     val mainAppDlcIdsWithoutProperDepotDlcIds = remember(gameId) {
@@ -124,7 +120,9 @@ fun GameManagerDialog(
                 .toMap()
             .forEach { (_, depotInfo) ->
                 allDownloadableApps.add(Pair(depotInfo.dlcAppId, depotInfo))
-                selectedAppIds[depotInfo.dlcAppId] = !indirectDlcAppIds.contains(depotInfo.dlcAppId) || installedDlcIds.contains(depotInfo.dlcAppId)
+                val installed = SteamService.getInstalledApp(depotInfo.dlcAppId)
+                selectedAppIds[depotInfo.dlcAppId] = !indirectDlcAppIds.contains(depotInfo.dlcAppId) || installedDlcIds.contains(depotInfo.dlcAppId) || installed != null
+                enabledAppIds[depotInfo.dlcAppId] = !installedDlcIds.contains(depotInfo.dlcAppId) && installed == null
             }
 
         allDownloadableApps.sortBy { it.first }
@@ -132,6 +130,7 @@ fun GameManagerDialog(
         // Add Base Game
         allDownloadableApps.add(0, Pair(gameId, downloadableDepots.toSortedMap().values.first()))
         selectedAppIds[gameId] = true
+        enabledAppIds[gameId] = false
     }
 
     fun getDepotAppName(depotInfo: DepotInfo): String {
@@ -327,20 +326,17 @@ fun GameManagerDialog(
                         ) {
                             allDownloadableApps.forEach { (dlcAppId, depotInfo) ->
                                 val checked = selectedAppIds[dlcAppId] ?: false
-
-                                // Disable selection if DLC is not downloadable or it is already installed
-                                val enabled = dlcAppId != gameId &&
-                                                !installedDlcIds.contains(dlcAppId)
+                                val enabled = enabledAppIds[dlcAppId] ?: false
 
                                 ListItem(
                                     headlineContent = {
                                         Text(
-                                            text = getDepotAppName(depotInfo) /*+
+                                            text = getDepotAppName(depotInfo) +
                                                     (if (BuildConfig.DEBUG) {
                                                         "\ndepotId: " + depotInfo.depotId + ", dlcAppId: " + depotInfo.dlcAppId
                                                     } else {
                                                         ""
-                                                    })*/
+                                                    })
                                         )
                                     },
                                     trailingContent = {
@@ -379,7 +375,9 @@ fun GameManagerDialog(
                                 Button(
                                     enabled = installButtonEnabled(),
                                     onClick = {
-                                        onInstall(selectedAppIds.filter { it.key != gameId && !hiddenDlcIds.contains(it.key) }.filter { it.value }.keys.toList())
+                                        onInstall(selectedAppIds
+                                            .filter { selectedId -> selectedId.key in enabledAppIds.filter { enabledId -> enabledId.value } }
+                                            .filter { selectedId -> selectedId.value }.keys.toList())
                                     }
                                 ) {
                                     Text(stringResource(R.string.install))
