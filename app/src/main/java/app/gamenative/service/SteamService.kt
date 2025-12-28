@@ -69,7 +69,6 @@ import `in`.dragonbra.javasteam.steam.handlers.steamapps.SteamApps
 import `in`.dragonbra.javasteam.steam.handlers.steamapps.callback.LicenseListCallback
 import `in`.dragonbra.javasteam.steam.handlers.steamcloud.SteamCloud
 import `in`.dragonbra.javasteam.steam.handlers.steamfriends.SteamFriends
-import `in`.dragonbra.javasteam.steam.handlers.steamfriends.callback.FriendsListCallback
 import `in`.dragonbra.javasteam.steam.handlers.steamfriends.callback.PersonaStateCallback
 import `in`.dragonbra.javasteam.steam.handlers.steamgameserver.SteamGameServer
 import `in`.dragonbra.javasteam.steam.handlers.steammasterserver.SteamMasterServer
@@ -89,7 +88,6 @@ import `in`.dragonbra.javasteam.steam.steamclient.callbacks.DisconnectedCallback
 import `in`.dragonbra.javasteam.steam.steamclient.configuration.SteamConfiguration
 import `in`.dragonbra.javasteam.types.FileData
 import `in`.dragonbra.javasteam.types.SteamID
-import `in`.dragonbra.javasteam.util.NetHelpers
 import `in`.dragonbra.javasteam.util.log.LogListener
 import `in`.dragonbra.javasteam.util.log.LogManager
 import java.io.Closeable
@@ -110,11 +108,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.filter
@@ -146,10 +141,10 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import android.util.Base64
 import app.gamenative.db.dao.EncryptedAppTicketDao
-import app.gamenative.utils.printAllKeyValues
 import kotlinx.coroutines.flow.update
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 
 @AndroidEntryPoint
@@ -1096,8 +1091,10 @@ class SteamService : Service(), IChallengeUrlChanged {
             // Combine main app and DLC depots
             val selectedDepots = mainAppDepots + dlcAppDepots
 
-            val downloadingAppIds = dlcAppIds.toMutableList()
-            val dlcAppIds = dlcAppIds.toMutableList()
+            val downloadingAppIds = CopyOnWriteArrayList<Int>()
+            downloadingAppIds.addAll(dlcAppIds)
+
+            val calculatedDlcAppIds = dlcAppIds.toMutableList()
             downloadingAppIds.add(appId)
 
             // There are some apps, the dlc depots does not have dlcAppId in the data, need to set it back
@@ -1119,10 +1116,10 @@ class SteamService : Service(), IChallengeUrlChanged {
             // If there are no DLC depots, download the main app only
             if (dlcAppDepots.isEmpty()) {
                 // Because all dlcIDs are coming from main depots, need to add the dlcID to main app in order to save it to db after finish download
-                mainAppDlcIds.addAll(dlcAppIds)
+                mainAppDlcIds.addAll(calculatedDlcAppIds)
 
                 // Refresh id List, so only main app is downloaded
-                dlcAppIds.clear()
+                calculatedDlcAppIds.clear()
                 downloadingAppIds.clear()
                 downloadingAppIds.add(appId)
             }
@@ -1235,7 +1232,7 @@ class SteamService : Service(), IChallengeUrlChanged {
                         val dlcListeners = ArrayList<AppDownloadListener>()
 
                         // Create AppItem for each DLC app
-                        dlcAppIds.forEach { dlcAppId ->
+                        calculatedDlcAppIds.forEach { dlcAppId ->
                             val dlcDepots = selectedDepots.filter { it.value.dlcAppId == dlcAppId }
                             val dlcDepotIds = dlcDepots.keys.sorted()
                             val dlcAppDepotIdToIndex = dlcDepots.keys.sorted().mapIndexed { index, depotId -> depotId to index }.toMap()
@@ -1347,7 +1344,7 @@ class SteamService : Service(), IChallengeUrlChanged {
                 }
 
                 // Remove completed appId from downloadInfo.dlcAppIds
-                downloadInfo.downloadingAppIds = downloadInfo.downloadingAppIds.filter { it != downloadingAppId }
+                downloadInfo.downloadingAppIds.removeIf { it != downloadingAppId }
 
                 // All downloading appIds are removed
                 if (downloadInfo.downloadingAppIds.isEmpty()) {

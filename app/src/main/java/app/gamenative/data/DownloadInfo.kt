@@ -10,7 +10,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 data class DownloadInfo(
     val gameId: Int,
-    var downloadingAppIds: List<Int>,
+    var downloadingAppIds: CopyOnWriteArrayList<Int>,
     val jobCount: Int = 1,
 ) {
     private var downloadJob: Job? = null

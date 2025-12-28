@@ -24,6 +24,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
@@ -42,7 +44,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import app.gamenative.BuildConfig
 import app.gamenative.R
 import app.gamenative.data.DepotInfo
 import app.gamenative.service.SteamService
@@ -90,10 +91,14 @@ fun GameManagerDialog(
     val installedApp = SteamService.getInstalledApp(gameId)
     val installedDlcIds = installedApp?.dlcDepots.orEmpty()
 
-    val indirectDlcAppIds = SteamService.getDownloadableDlcAppsOf(gameId).orEmpty().map { it.id }
+    val indirectDlcAppIds = remember(gameId) {
+        SteamService.getDownloadableDlcAppsOf(gameId).orEmpty().map { it.id }
+    }
 
     // Filter out DLCs that are not in the appInfo, this can happen for DLCs that are not in the appInfo
-    val hiddenDlcIds = SteamService.getHiddenDlcAppsOf(gameId).orEmpty().map { it.id }.filter { id -> appInfo.depots[id] == null }
+    val hiddenDlcIds = remember(gameId, appInfo) {
+        SteamService.getHiddenDlcAppsOf(gameId).orEmpty().map { it.id }.filter { id -> appInfo.depots[id] == null }
+    }
 
     LaunchedEffect(visible) {
         scrollState.animateScrollTo(0)
@@ -174,8 +179,11 @@ fun GameManagerDialog(
         )
     }
 
+    val installSizeInfo by remember(downloadableDepots.keys.toSet(), selectedAppIds.toMap()) {
+        derivedStateOf { getInstallSizeInfo() }
+    }
+
     fun installSizeDisplay() : String {
-        val installSizeInfo = getInstallSizeInfo()
         return context.getString(
             R.string.steam_install_space,
             installSizeInfo.downloadSize,
@@ -185,7 +193,6 @@ fun GameManagerDialog(
     }
 
     fun installButtonEnabled() : Boolean {
-        val installSizeInfo = getInstallSizeInfo()
         if (installSizeInfo.availableBytes < installSizeInfo.installBytes) {
             return false
         }
