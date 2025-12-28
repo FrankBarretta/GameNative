@@ -1227,26 +1227,30 @@ class SteamService : Service(), IChallengeUrlChanged {
                             parentJob = coroutineContext[Job]
                         )
 
-                        // Create mapping from depotId to index for progress tracking
-                        val mainAppDepotIds = mainAppDepots.keys.sorted()
-                        val mainAppDepotIdToIndex = mainAppDepotIds.mapIndexed { index, depotId -> depotId to index }.toMap()
-
-                        // Create listener
-                        val mainAppListener = AppDownloadListener(di, mainAppDepotIdToIndex, appId, mainAppDlcIds,mainAppDepotIds, appDirPath)
-                        depotDownloader.addListener(mainAppListener)
-
-                        // Create AppItem with only mandatory appId
-                        val mainAppItem = AppItem(
-                            appId,
-                            installDirectory = getAppDirPath(appId),
-                            depot = mainAppDepotIds,
-                        )
-
-                        // Add item to downloader
-                        depotDownloader.add(mainAppItem)
-
                         // Create listeners for DLC apps
-                        val dlcListeners = ArrayList<AppDownloadListener>()
+                        val appListeners = ArrayList<AppDownloadListener>()
+
+                        if (mainAppDepots.isNotEmpty()) {
+                            // Create mapping from depotId to index for progress tracking
+                            val mainAppDepotIds = mainAppDepots.keys.sorted()
+                            val mainAppDepotIdToIndex = mainAppDepotIds.mapIndexed { index, depotId -> depotId to index }.toMap()
+
+                            // Create listener
+                            val mainAppListener =
+                                AppDownloadListener(di, mainAppDepotIdToIndex, appId, mainAppDlcIds, mainAppDepotIds, appDirPath)
+                            depotDownloader.addListener(mainAppListener)
+                            appListeners.add(mainAppListener)
+
+                            // Create AppItem with only mandatory appId
+                            val mainAppItem = AppItem(
+                                appId,
+                                installDirectory = getAppDirPath(appId),
+                                depot = mainAppDepotIds,
+                            )
+
+                            // Add item to downloader
+                            depotDownloader.add(mainAppItem)
+                        }
 
                         // Create AppItem for each DLC app
                         calculatedDlcAppIds.forEach { dlcAppId ->
@@ -1256,7 +1260,7 @@ class SteamService : Service(), IChallengeUrlChanged {
 
                             val dlcAppListener = AppDownloadListener(di, dlcAppDepotIdToIndex, dlcAppId, emptyList(), dlcDepotIds, appDirPath)
                             depotDownloader.addListener(dlcAppListener)
-                            dlcListeners.add(dlcAppListener)
+                            appListeners.add(dlcAppListener)
 
                             val dlcAppItem = AppItem(
                                 dlcAppId,
@@ -1275,11 +1279,9 @@ class SteamService : Service(), IChallengeUrlChanged {
                         // Wait for completion
                         depotDownloader.getCompletion().await()
 
-                        // Remove listener
-                        depotDownloader.removeListener(mainAppListener)
-
                         // Remove dlc listeners
-                        dlcListeners.forEach { depotDownloader.removeListener(it) }
+                        appListeners.forEach { depotDownloader.removeListener(it) }
+                        appListeners.clear()
 
                         // Close the downloader
                         depotDownloader.close()
