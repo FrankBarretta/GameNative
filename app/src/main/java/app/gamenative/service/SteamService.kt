@@ -890,6 +890,13 @@ class SteamService : Service(), IChallengeUrlChanged {
                         appInfoDao.deleteApp(appId)
                         changeNumbersDao.deleteByAppId(appId)
                         fileChangeListsDao.deleteByAppId(appId)
+
+                        val indirectDlcAppIds = getDownloadableDlcAppsOf(appId).orEmpty().map { it.id }
+                        indirectDlcAppIds.forEach { dlcAppId ->
+                            appInfoDao.deleteApp(dlcAppId)
+                            changeNumbersDao.deleteByAppId(dlcAppId)
+                            fileChangeListsDao.deleteByAppId(dlcAppId)
+                        }
                     }
                 }
             }
