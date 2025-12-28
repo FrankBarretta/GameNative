@@ -12,12 +12,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import app.gamenative.ui.component.icons.VR
-import app.gamenative.ui.theme.friendAwayOrSnooze
-import app.gamenative.ui.theme.friendBlocked
-import app.gamenative.ui.theme.friendInGame
-import app.gamenative.ui.theme.friendInGameAwayOrSnooze
-import app.gamenative.ui.theme.friendOffline
-import app.gamenative.ui.theme.friendOnline
+import app.gamenative.ui.theme.DarkColors
 import `in`.dragonbra.javasteam.enums.EClientPersonaStateFlag
 import `in`.dragonbra.javasteam.enums.EFriendRelationship
 import `in`.dragonbra.javasteam.enums.EPersonaState
@@ -121,13 +116,13 @@ data class SteamFriend(
 
     val statusColor: Color
         get() = when {
-            isBlocked -> friendBlocked
-            isOffline -> friendOffline
-            isInGameAwayOrSnooze -> friendInGameAwayOrSnooze
-            isAwayOrSnooze -> friendAwayOrSnooze
-            isPlayingGame -> friendInGame
-            isOnline -> friendOnline
-            else -> friendOffline
+            isBlocked -> DarkColors.friendBlocked
+            isOffline -> DarkColors.friendOffline
+            isInGameAwayOrSnooze -> DarkColors.friendInGameAwayOrSnooze
+            isAwayOrSnooze -> DarkColors.friendAwayOrSnooze
+            isPlayingGame -> DarkColors.friendInGame
+            isOnline -> DarkColors.friendOnline
+            else -> DarkColors.friendOffline
         }
 
     val statusIcon: ImageVector?
