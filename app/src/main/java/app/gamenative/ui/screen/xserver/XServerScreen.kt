@@ -56,10 +56,12 @@ import app.gamenative.PluviaApp
 import app.gamenative.PrefManager
 import app.gamenative.data.GameSource
 import app.gamenative.data.LaunchInfo
+import app.gamenative.data.LibraryItem
 import app.gamenative.data.SteamApp
 import app.gamenative.events.AndroidEvent
 import app.gamenative.events.SteamEvent
 import app.gamenative.service.SteamService
+import app.gamenative.service.gog.GOGService
 import app.gamenative.ui.component.settings.SettingsListDropdown
 import app.gamenative.ui.data.XServerState
 import app.gamenative.ui.theme.settingsTileColors
@@ -1673,18 +1675,21 @@ private fun getWineStartCommand(
 
     Timber.tag("XServerScreen").d("appLaunchInfo is $appLaunchInfo")
 
-    // Check if this is a Custom Game
-    val isCustomGame = ContainerUtils.extractGameSourceFromContainerId(appId) == GameSource.CUSTOM_GAME
-    val steamAppId = ContainerUtils.extractGameIdFromContainerId(appId)
+    // Check game source
+    val gameSource = ContainerUtils.extractGameSourceFromContainerId(appId)
+    val isCustomGame = gameSource == GameSource.CUSTOM_GAME
+    val isGOGGame = gameSource == GameSource.GOG
+    val gameId = ContainerUtils.extractGameIdFromContainerId(appId)
 
-    if (!isCustomGame) {
+    if (!isCustomGame && !isGOGGame) {
+        // Steam-specific setup
         if (container.executablePath.isEmpty()){
-            container.executablePath = SteamService.getInstalledExe(steamAppId)
+            container.executablePath = SteamService.getInstalledExe(gameId)
             container.saveData()
         }
         if (!container.isUseLegacyDRM){
             // Create ColdClientLoader.ini file
-            SteamUtils.writeColdClientIni(steamAppId, container)
+            SteamUtils.writeColdClientIni(gameId, container)
         }
     }
 
@@ -1692,6 +1697,28 @@ private fun getWineStartCommand(
         "\"Z:/opt/apps/TestD3D.exe\""
     } else if (bootToContainer) {
         "\"wfm.exe\""
+    } else if (isGOGGame) {
+        // For GOG games, use GOGService to get the launch command
+        Timber.tag("XServerScreen").i("Launching GOG game: $gameId")
+
+        // Create a LibraryItem from the appId
+        val libraryItem = LibraryItem(
+            appId = appId,
+            name = "", // Name not needed for launch command
+            gameSource = GameSource.GOG
+        )
+
+        val gogCommand = GOGService.getGogWineStartCommand(
+            libraryItem = libraryItem,
+            container = container,
+            bootToContainer = bootToContainer,
+            appLaunchInfo = appLaunchInfo,
+            envVars = envVars,
+            guestProgramLauncherComponent = guestProgramLauncherComponent
+        )
+
+        Timber.tag("XServerScreen").i("GOG launch command: $gogCommand")
+        return "winhandler.exe $gogCommand"
     } else if (isCustomGame) {
         // For Custom Games, we can launch even without appLaunchInfo
         // Use the executable path from container config. If missing, try to auto-detect
@@ -1746,18 +1773,18 @@ private fun getWineStartCommand(
         if (container.isLaunchRealSteam()) {
             // Launch Steam with the applaunch parameter to start the game
             "\"C:\\\\Program Files (x86)\\\\Steam\\\\steam.exe\" -silent -vgui -tcp " +
-                    "-nobigpicture -nofriendsui -nochatui -nointro -applaunch $steamAppId"
+                    "-nobigpicture -nofriendsui -nochatui -nointro -applaunch $gameId"
         } else {
             var executablePath = ""
             if (container.executablePath.isNotEmpty()) {
                 executablePath = container.executablePath
             } else {
-                executablePath = SteamService.getInstalledExe(steamAppId)
+                executablePath = SteamService.getInstalledExe(gameId)
                 container.executablePath = executablePath
                 container.saveData()
             }
             if (container.isUseLegacyDRM) {
-                val appDirPath = SteamService.getAppDirPath(steamAppId)
+                val appDirPath = SteamService.getAppDirPath(gameId)
                 val executableDir = appDirPath + "/" + executablePath.substringBeforeLast("/", "")
                 guestProgramLauncherComponent.workingDir = File(executableDir);
                 Timber.i("Working directory is ${executableDir}")
