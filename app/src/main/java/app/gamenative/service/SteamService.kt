@@ -1496,6 +1496,9 @@ class SteamService : Service(), IChallengeUrlChanged {
                 depotIdToIndex[depotId]?.let { index ->
                     downloadInfo.setProgress(depotPercentComplete, index)
                 }
+
+                // Persist progress snapshot
+                downloadInfo.persistProgressSnapshot()
             }
 
             override fun onDepotCompleted(depotId: Int, compressedBytes: Long, uncompressedBytes: Long) {
@@ -1513,6 +1516,9 @@ class SteamService : Service(), IChallengeUrlChanged {
                 depotIdToIndex[depotId]?.let { index ->
                     downloadInfo.setProgress(1f, index)
                 }
+
+                // Persist progress snapshot
+                downloadInfo.persistProgressSnapshot()
             }
         }
 
