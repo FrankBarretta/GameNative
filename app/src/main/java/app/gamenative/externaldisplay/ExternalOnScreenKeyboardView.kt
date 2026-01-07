@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.StateListDrawable
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -11,6 +12,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import com.winlator.xserver.XKeycode
 import com.winlator.xserver.XServer
+import kotlin.math.roundToInt
 
 class ExternalOnScreenKeyboardView(
     context: Context,
@@ -244,18 +246,35 @@ class ExternalOnScreenKeyboardView(
         normal: Boolean = false,
         highlight: Boolean = false,
         strong: Boolean = false,
-    ): GradientDrawable {
+    ): StateListDrawable {
         val radius = dp(8).toFloat()
-        val color = when {
+        val baseColor = when {
             highlight && strong -> 0xFF2E5AAC.toInt()
             highlight -> 0xFF3D6CC4.toInt()
             normal -> 0xFF3A3A3A.toInt()
             else -> 0xFF3A3A3A.toInt()
         }
-        return GradientDrawable().apply {
+
+        val pressedColor = blendColor(baseColor, Color.WHITE, 0.18f)
+
+        fun shape(color: Int): GradientDrawable = GradientDrawable().apply {
             cornerRadius = radius
             setColor(color)
         }
+
+        return StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_pressed), shape(pressedColor))
+            addState(intArrayOf(), shape(baseColor))
+        }
+    }
+
+    private fun blendColor(from: Int, to: Int, ratio: Float): Int {
+        val clamped = ratio.coerceIn(0f, 1f)
+        val inverse = 1f - clamped
+        val a = (Color.alpha(from) * inverse + Color.alpha(to) * clamped).roundToInt()
+        val r = (Color.red(from) * inverse + Color.red(to) * clamped).roundToInt()
+        val g = (Color.green(from) * inverse + Color.green(to) * clamped).roundToInt()
+        val b = (Color.blue(from) * inverse + Color.blue(to) * clamped).roundToInt()
+        return Color.argb(a, r, g, b)
     }
 }
-
