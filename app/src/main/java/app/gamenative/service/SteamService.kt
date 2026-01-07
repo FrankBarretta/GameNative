@@ -1200,7 +1200,7 @@ class SteamService : Service(), IChallengeUrlChanged {
                 )
             }
 
-            val info = DownloadInfo(appId, downloadingAppIds, selectedDepots.size).also { di ->
+            val info = DownloadInfo(selectedDepots.size, appId, downloadingAppIds).also { di ->
                 di.setPersistencePath(appDirPath)
                 // Set weights for each depot based on manifest sizes
                 val sizes = selectedDepots.map { (_, depot) ->
