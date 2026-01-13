@@ -183,6 +183,7 @@ fun XServerScreen(
     var firstTimeBoot = false
     var needsUnpacking = false
     var containerVariantChanged = false
+    var wineVersionChanged = false
     var frameRating by remember { mutableStateOf<FrameRating?>(null) }
     var frameRatingWindowId = -1
     var vkbasaltConfig = ""
@@ -644,6 +645,7 @@ fun XServerScreen(
                             taskAffinityMask = ProcessHelper.getAffinityMask(container.getCPUList(true)).toShort().toInt()
                             taskAffinityMaskWoW64 = ProcessHelper.getAffinityMask(container.getCPUListWoW64(true)).toShort().toInt()
                             containerVariantChanged = container.containerVariant != imageFs.variant
+                            wineVersionChanged = container.wineVersion != imageFs.getArch()
                             firstTimeBoot = container.getExtra("appVersion").isEmpty() || containerVariantChanged
                             needsUnpacking = container.isNeedsUnpacking
                             Timber.i("First time boot: $firstTimeBoot")
@@ -730,6 +732,7 @@ fun XServerScreen(
                                 appLaunchInfo,
                                 xServerView!!.getxServer(),
                                 containerVariantChanged,
+                                wineVersionChanged,
                                 onGameLaunchError,
                                 navigateBack,
                             )
@@ -1406,6 +1409,7 @@ private fun setupXEnvironment(
     // shortcut: Shortcut?,
     xServer: XServer,
     containerVariantChanged: Boolean,
+    wineVersionChanged: Boolean,
     onGameLaunchError: ((String) -> Unit)? = null,
     navigateBack: () -> Unit,
 ): XEnvironment {
@@ -1536,7 +1540,7 @@ private fun setupXEnvironment(
         guestProgramLauncherComponent.box86Preset = container.box86Preset
         guestProgramLauncherComponent.box64Preset = container.box64Preset
         guestProgramLauncherComponent.setPreUnpack {
-            unpackExecutableFile(context, container.isNeedsUnpacking, container, appId, appLaunchInfo, guestProgramLauncherComponent, containerVariantChanged, onGameLaunchError)
+            unpackExecutableFile(context, container.isNeedsUnpacking, container, appId, appLaunchInfo, guestProgramLauncherComponent, containerVariantChanged, wineVersionChanged, onGameLaunchError)
         }
 
         val enableGstreamer = container.isGstreamerWorkaround()
@@ -2105,11 +2109,12 @@ private fun unpackExecutableFile(
     appLaunchInfo: LaunchInfo?,
     guestProgramLauncherComponent: GuestProgramLauncherComponent,
     containerVariantChanged: Boolean,
+    wineVersionChanged: Boolean,
     onError: ((String) -> Unit)? = null,
 ) {
     val imageFs = ImageFs.find(context)
     var output = StringBuilder()
-    if (needsUnpacking || containerVariantChanged){
+    if (needsUnpacking || containerVariantChanged || wineVersionChanged){
         try {
             PluviaApp.events.emit(AndroidEvent.SetBootingSplashText("Installing Mono..."))
             val monoCmd = "wine msiexec /i Z:\\opt\\mono-gecko-offline\\wine-mono-9.0.0-x86.msi && wineserver -k"
