@@ -12,6 +12,7 @@ import com.winlator.core.TarCompressorUtils
 import com.winlator.core.envvars.EnvVars
 import com.winlator.xconnector.UnixSocketConfig
 import com.winlator.xenvironment.ImageFs
+import `in`.dragonbra.javasteam.types.KeyValue
 import timber.log.Timber
 import java.io.BufferedReader
 import java.io.File
@@ -284,16 +285,9 @@ class SteamTokenLogin(
             if (vdfContent.contains("ConnectCache")) {
                 // Find the value of ConnectCache
                 // Use structured parsing:
-                val vdfData = VdfStringParser().parse(vdfContent)
-                val installConfig = vdfData["InstallConfigStore"] as? Map<String, Any>
-                val software = installConfig?.get("Software") as? Map<String, Any>
-                val valve = software?.get("Valve") as? Map<String, Any>
-                val steam = valve?.get("Steam") as? Map<String, Any>
-                val mtbf = steam?.get("MTBF") as? String
-                val connectCacheSection = steam?.get("ConnectCache") as? Map<String, Any>
-
-                // Get the first key-value pair from ConnectCache (the encrypted token)
-                val connectCacheValue = connectCacheSection?.get(hdr()) as? String
+                val vdfData = KeyValue.loadFromString(vdfContent)!!
+                val mtbf = vdfData["Software"]["Valve"]["Steam"]["MTBF"].value
+                val connectCacheValue = vdfData["Software"]["Valve"]["Steam"]["ConnectCache"][hdr()].value
 
                 if (mtbf != null && connectCacheValue != null) {
                     try {
@@ -368,15 +362,8 @@ class SteamTokenLogin(
             // Remove local.vdf
             if (localSteamDir.resolve("local.vdf").exists()) {
                 val vdfContent = FileUtils.readString(localSteamDir.resolve("local.vdf").toFile())
-                val vdfData = VdfStringParser().parse(vdfContent)
-                val machineUserConfigStore = vdfData["MachineUserConfigStore"] as? Map<String, Any>
-                val software = machineUserConfigStore?.get("Software") as? Map<String, Any>
-                val valve = software?.get("Valve") as? Map<String, Any>
-                val steam = valve?.get("Steam") as? Map<String, Any>
-                val connectCache = steam?.get("ConnectCache") as? Map<String, Any>
-
-                // Get the first key-value pair from ConnectCache (the encrypted token)
-                val connectCacheValue = connectCache?.get(hdr()) as? String
+                val vdfData = KeyValue.loadFromString(vdfContent)!!
+                val connectCacheValue = vdfData["Software"]["Valve"]["Steam"]["ConnectCache"][hdr()].value
                 if (connectCacheValue != null) {
                     try {
                         val dToken = decryptToken(connectCacheValue.trimEnd(NULL_CHAR))
