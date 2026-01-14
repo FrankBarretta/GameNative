@@ -142,6 +142,7 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.util.Arrays
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.io.path.name
 import kotlin.text.lowercase
 import com.winlator.PrefManager as WinlatorPrefManager
@@ -149,6 +150,9 @@ import com.winlator.PrefManager as WinlatorPrefManager
 // Always re-extract drivers and DXVK on every launch to handle cases of container corruption
 // where games randomly stop working. Set to false once corruption issues are resolved.
 private const val ALWAYS_REEXTRACT = true
+
+// Guard to prevent duplicate game_exited events when multiple exit triggers fire simultaneously
+private val isExiting = AtomicBoolean(false)
 
 // TODO logs in composables are 'unstable' which can cause recomposition (performance issues)
 
@@ -1911,15 +1915,19 @@ private fun filterExecutablesForSteamless(executables: List<String>): List<Strin
 }
 private fun exit(winHandler: WinHandler?, environment: XEnvironment?, frameRating: FrameRating?, appInfo: SteamApp?, container: Container, onExit: () -> Unit, navigateBack: () -> Unit) {
     Timber.i("Exit called")
-    PostHog.capture(
-        event = "game_exited",
-        properties = mapOf(
-            "game_name" to appInfo?.name.toString(),
-            "session_length" to (frameRating?.sessionLengthSec ?: 0),
-            "avg_fps" to (frameRating?.avgFPS ?: 0.0),
-            "container_config" to container.containerJson,
-        ),
-    )
+    
+    // Prevent duplicate PostHog events when multiple exit triggers fire simultaneously
+    if (isExiting.compareAndSet(false, true)) {
+        PostHog.capture(
+            event = "game_exited",
+            properties = mapOf(
+                "game_name" to appInfo?.name.toString(),
+                "session_length" to (frameRating?.sessionLengthSec ?: 0),
+                "avg_fps" to (frameRating?.avgFPS ?: 0.0),
+                "container_config" to container.containerJson,
+            ),
+        )
+    }
 
     // Store session data in container metadata
     frameRating?.let { rating ->
