@@ -346,7 +346,7 @@ object SteamUtils {
             account = PrefManager.username,
             refreshToken = PrefManager.refreshToken,
             accessToken = PrefManager.accessToken,      // may be blank
-            personaName = SteamService.instance?.localPersona?.value?.name!!
+            personaName = SteamService.instance?.localPersona?.value?.name ?: PrefManager.username
         )
         val steamConfigDir = File(imageFs.wineprefix, "drive_c/Program Files (x86)/Steam/config")
         try {
