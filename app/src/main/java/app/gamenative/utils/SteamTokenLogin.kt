@@ -7,14 +7,11 @@ import com.winlator.container.Container
 import com.winlator.contents.ContentProfile
 import com.winlator.contents.ContentsManager
 import com.winlator.core.FileUtils
-import com.winlator.core.ProcessHelper
 import com.winlator.core.TarCompressorUtils
-import com.winlator.core.envvars.EnvVars
-import com.winlator.xconnector.UnixSocketConfig
 import com.winlator.xenvironment.ImageFs
+import com.winlator.xenvironment.components.GuestProgramLauncherComponent
 import `in`.dragonbra.javasteam.types.KeyValue
 import timber.log.Timber
-import java.io.BufferedReader
 import java.io.File
 import java.nio.file.Files
 import java.util.zip.CRC32
@@ -35,16 +32,8 @@ class SteamTokenLogin(
     private val container: Container,
     private val isArm64EC: Boolean,
     private val wineProfile: ContentProfile?,
+    private val guestProgramLauncherComponent: GuestProgramLauncherComponent? = null,
 ) {
-    private val winePath: String = if (container.containerVariant == Container.BIONIC) {
-        imageFs.winePath + "/bin"
-    } else {
-        if (wineProfile == null)
-            imageFs.getWinePath() + "/bin"
-        else
-            ContentsManager.getSourceFile(context, wineProfile, wineProfile.wineBinPath).absolutePath
-    }
-
     fun setupSteamFiles() {
         // For loginusers.vdf and reg values
         SteamUtils.autoLoginUserChanges(imageFs = imageFs)
@@ -58,107 +47,8 @@ class SteamTokenLogin(
     }
 
     private fun execCommand(command: String) : String {
-        val envVars = EnvVars()
-        // Common environment variables for both container types
-        envVars.put("WINEDEBUG", "-all")
-        envVars.put("WINEPREFIX", imageFs.wineprefix)
-
-        if (container.containerVariant == Container.BIONIC) {
-            envVars.put("HOME", imageFs.home_path)
-            envVars.put("USER", ImageFs.USER)
-            envVars.put("TMPDIR", imageFs.rootDir.path + "/tmp")
-            envVars.put("DISPLAY", ":0")
-            envVars.put("PATH", winePath + ":" + imageFs.rootDir.path + "/usr/bin")
-            envVars.put("LD_LIBRARY_PATH", imageFs.rootDir.path + "/usr/lib" + ":" + "/system/lib64")
-            envVars.put("FONTCONFIG_PATH", imageFs.rootDir.path + "/usr/etc/fonts")
-            envVars.put("XDG_DATA_DIRS", imageFs.rootDir.path + "/usr/share")
-            envVars.put("XDG_CONFIG_DIRS", imageFs.rootDir.path + "/usr/etc/xdg")
-            envVars.put("ANDROID_SYSVSHM_SERVER", imageFs.rootDir.path + UnixSocketConfig.SYSVSHM_SERVER_PATH)
-            envVars.put("PREFIX", imageFs.rootDir.path + "/usr")
-            envVars.put("WINE_NO_DUPLICATE_EXPLORER", "1")
-            envVars.put("WINE_DISABLE_FULLSCREEN_HACK", "1")
-
-            if (!isArm64EC) {
-                // Set execute permissions.
-                val box64File: File = File(imageFs.rootDir, "usr/bin/box64")
-                if (box64File.exists()) {
-                    FileUtils.chmod(box64File, 493) // 0755
-                }
-            }
-        } else {
-            if (!File(imageFs.rootDir.path, "/usr/local/bin/box64").exists()) {
-                // Extract box64 if it doesn't exist yet
-                TarCompressorUtils.extract(
-                    TarCompressorUtils.Type.ZSTD,
-                    context.assets,
-                    "box86_64/box64-" + container.box64Version + ".tzst",
-                    imageFs.rootDir,
-                )
-            }
-
-            envVars.put("HOME", imageFs.home_path)
-            envVars.put("USER", ImageFs.USER)
-            envVars.put("TMPDIR", imageFs.rootDir.path + "/tmp")
-            envVars.put("DISPLAY", ":0")
-            envVars.put(
-                "PATH",
-                winePath + ":" +
-                        imageFs.rootDir.path + "/usr/bin:" +
-                        imageFs.rootDir.path + "/usr/local/bin",
-            )
-            envVars.put("LD_LIBRARY_PATH", imageFs.rootDir.path + "/usr/lib")
-            envVars.put("BOX64_LD_LIBRARY_PATH", imageFs.rootDir.path + "/usr/lib/x86_64-linux-gnu")
-            envVars.put("ANDROID_SYSVSHM_SERVER", imageFs.rootDir.path + UnixSocketConfig.SYSVSHM_SERVER_PATH)
-            envVars.put("FONTCONFIG_PATH", imageFs.rootDir.path + "/usr/etc/fonts")
-
-            if (File(imageFs.glibc64Dir, "libandroid-sysvshm.so").exists() ||
-                File(imageFs.glibc32Dir, "libandroid-sysvshm.so").exists()) {
-                envVars.put("LD_PRELOAD", "libredirect.so libandroid-sysvshm.so")
-            }
-
-            envVars.put("WINEESYNC_WINLATOR", "1")
-        }
-
-        val finalCommand = if (container.containerVariant == Container.BIONIC) {
-            if (isArm64EC) {
-                winePath + "/" + command
-            } else {
-                imageFs.binDir.path + "/box64" + " " + command
-            }
-        } else {
-            imageFs.rootDir.path + "/usr/local/bin/box64" + " " + command
-        }
-
-        Timber.tag("SteamTokenLogin").d("Executing: " + ProcessHelper.splitCommand(finalCommand).contentToString() + ", " + envVars.toStringArray().contentToString() + ", " + imageFs.rootDir)
-
-        val process = Runtime.getRuntime().exec(finalCommand, envVars.toStringArray(), imageFs.rootDir)
-        val reader = BufferedReader(process.inputStream.reader())
-        val errorReader = BufferedReader(process.errorStream.reader())
-
-        val output = StringBuilder()
-        val errorOutput = StringBuilder()
-
-        var line: String?
-        while ((reader.readLine().also { line = it }) != null) {
-            output.append(line).append("\n")
-        }
-
-        var errorLine: String?
-        while ((errorReader.readLine().also { errorLine = it }) != null) {
-            errorOutput.append(errorLine).append("\n")
-        }
-
-        val exitCode = process.waitFor()
-
-        // Check if command succeeded
-        if (exitCode != 0) {
-            throw RuntimeException("Command execution failed with exit code: $exitCode. Output: $output, Error Output: $errorOutput")
-        }
-
-        // Filter out Wine debug messages and get the actual result
-        return output.lines()
-            .joinToString("\n")
-            .trim()
+        return guestProgramLauncherComponent?.execShellCommand(command)
+            ?: throw IllegalStateException("GuestProgramLauncherComponent is required for command execution")
     }
 
     private fun killWineServer() {

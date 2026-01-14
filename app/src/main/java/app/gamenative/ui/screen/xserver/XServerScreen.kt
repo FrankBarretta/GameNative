@@ -1548,6 +1548,7 @@ private fun setupXEnvironment(
                 container = container,
                 isArm64EC = xServerState.value.wineInfo.isArm64EC,
                 wineProfile = contentsManager.getProfileByEntryName(container.wineVersion),
+                guestProgramLauncherComponent = guestProgramLauncherComponent,
             ).setupSteamFiles()
         }
 
