@@ -26,6 +26,13 @@ public class Container {
         THUMBSTICK_UP, THUMBSTICK_DOWN, THUMBSTICK_LEFT, THUMBSTICK_RIGHT
     }
 
+    // External display modes
+    public static final String EXTERNAL_DISPLAY_MODE_OFF = "off";
+    public static final String EXTERNAL_DISPLAY_MODE_TOUCHPAD = "touchpad";
+    public static final String EXTERNAL_DISPLAY_MODE_KEYBOARD = "keyboard";
+    public static final String EXTERNAL_DISPLAY_MODE_HYBRID = "hybrid";
+    public static final String DEFAULT_EXTERNAL_DISPLAY_MODE = EXTERNAL_DISPLAY_MODE_OFF;
+
     public static final String DEFAULT_ENV_VARS = "WRAPPER_MAX_IMAGE_COUNT=0 ZINK_DESCRIPTORS=lazy ZINK_DEBUG=compact MESA_SHADER_CACHE_DISABLE=false MESA_SHADER_CACHE_MAX_SIZE=512MB mesa_glthread=true WINEESYNC=1 MESA_VK_WSI_PRESENT_MODE=mailbox TU_DEBUG=noconform DXVK_FRAME_RATE=60 PULSE_LATENCY_MSEC=144";
     public static final String DEFAULT_SCREEN_SIZE = "1280x720";
     public static final String DEFAULT_GRAPHICS_DRIVER = DefaultVersion.DEFAULT_GRAPHICS_DRIVER;
@@ -113,7 +120,9 @@ public class Container {
     // Touchscreen mode
     private boolean touchscreenMode = false;
     // External display input handling
-    private String externalDisplayMode = "hybrid";
+    private String externalDisplayMode = DEFAULT_EXTERNAL_DISPLAY_MODE;
+    // Swap game/input between internal and external displays
+    private boolean externalDisplaySwap = false;
     // Prefer DRI3 WSI path
     private boolean useDRI3 = true;
     // Steam client type for selecting appropriate Box64 RC config: normal, light, ultralight
@@ -649,6 +658,7 @@ public class Container {
             // Touchscreen mode flag
             data.put("touchscreenMode", touchscreenMode);
             data.put("externalDisplayMode", externalDisplayMode);
+            data.put("externalDisplaySwap", externalDisplaySwap);
             data.put("useDRI3", useDRI3);
             data.put("installPath", installPath);
             data.put("steamType", steamType);
@@ -822,6 +832,9 @@ public class Container {
                 case "externalDisplayMode" :
                     setExternalDisplayMode(data.getString(key));
                     break;
+                case "externalDisplaySwap" :
+                    setExternalDisplaySwap(data.getBoolean(key));
+                    break;
                 case "useDRI3" :
                     setUseDRI3(data.getBoolean(key));
                     break;
@@ -951,11 +964,19 @@ public class Container {
 
     // External display mode
     public String getExternalDisplayMode() {
-        return externalDisplayMode != null ? externalDisplayMode : "hybrid";
+        return externalDisplayMode != null ? externalDisplayMode : DEFAULT_EXTERNAL_DISPLAY_MODE;
     }
 
     public void setExternalDisplayMode(String externalDisplayMode) {
-        this.externalDisplayMode = externalDisplayMode != null ? externalDisplayMode : "touchpad";
+        this.externalDisplayMode = externalDisplayMode != null ? externalDisplayMode : DEFAULT_EXTERNAL_DISPLAY_MODE;
+    }
+
+    public boolean isExternalDisplaySwap() {
+        return externalDisplaySwap;
+    }
+
+    public void setExternalDisplaySwap(boolean externalDisplaySwap) {
+        this.externalDisplaySwap = externalDisplaySwap;
     }
 
     // Use DRI3 WSI

@@ -686,9 +686,9 @@ fun ContainerConfigDialog(
         }
         var externalDisplayModeIndex by rememberSaveable {
             val index = when (config.externalDisplayMode.lowercase()) {
-                "touchpad" -> 1
-                "keyboard" -> 2
-                "hybrid" -> 3
+                Container.EXTERNAL_DISPLAY_MODE_TOUCHPAD -> 1
+                Container.EXTERNAL_DISPLAY_MODE_KEYBOARD -> 2
+                Container.EXTERNAL_DISPLAY_MODE_HYBRID -> 3
                 else -> 0
             }
             mutableIntStateOf(index)
@@ -1730,13 +1730,20 @@ fun ContainerConfigDialog(
                                         externalDisplayModeIndex = index
                                         config = config.copy(
                                             externalDisplayMode = when (index) {
-                                                1 -> "touchpad"
-                                                2 -> "keyboard"
-                                                3 -> "hybrid"
-                                                else -> "off"
+                                                1 -> Container.EXTERNAL_DISPLAY_MODE_TOUCHPAD
+                                                2 -> Container.EXTERNAL_DISPLAY_MODE_KEYBOARD
+                                                3 -> Container.EXTERNAL_DISPLAY_MODE_HYBRID
+                                                else -> Container.EXTERNAL_DISPLAY_MODE_OFF
                                             },
                                         )
                                     },
+                                )
+                                SettingsSwitch(
+                                    colors = settingsTileColorsAlt(),
+                                    title = { Text(text = stringResource(R.string.external_display_swap)) },
+                                    subtitle = { Text(text = stringResource(R.string.external_display_swap_subtitle)) },
+                                    state = config.externalDisplaySwap,
+                                    onCheckedChange = { config = config.copy(externalDisplaySwap = it) }
                                 )
                             }
                             if (selectedTab == 4) SettingsGroup() {
@@ -2103,4 +2110,3 @@ private fun ExecutablePathDropdown(
         }
     }
 }
-

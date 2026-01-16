@@ -14,12 +14,14 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
+import androidx.core.content.ContextCompat
 import app.gamenative.R
+import com.winlator.container.Container
 import com.winlator.widget.TouchpadView
 import com.winlator.xserver.XServer
 
-private const val EXTERNAL_TOUCHPAD_BG: Int = 0xFF2B2B2B.toInt()
-private const val EXTERNAL_KEYBOARD_BG: Int = 0xFF2B2B2B.toInt()
+private const val EXTERNAL_SURFACE_BG_RES: Int = R.color.external_display_surface_background
+private const val EXTERNAL_KEY_BG_RES: Int = R.color.external_display_key_background
 
 class ExternalDisplayInputController(
     private val context: Context,
@@ -30,9 +32,9 @@ class ExternalDisplayInputController(
 
     companion object {
         fun fromConfig(value: String?): Mode = when (value?.lowercase()) {
-            "touchpad" -> Mode.TOUCHPAD
-            "keyboard" -> Mode.KEYBOARD
-            "hybrid" -> Mode.HYBRID
+            Container.EXTERNAL_DISPLAY_MODE_TOUCHPAD -> Mode.TOUCHPAD
+            Container.EXTERNAL_DISPLAY_MODE_KEYBOARD -> Mode.KEYBOARD
+            Container.EXTERNAL_DISPLAY_MODE_HYBRID -> Mode.HYBRID
             else -> Mode.OFF
         }
     }
@@ -111,11 +113,12 @@ class ExternalDisplayInputController(
     }
 
     private fun findPresentationDisplay(): Display? {
+        val currentDisplay = context.display ?: return null
         // Required detection logic for external presentation displays
         return displayManager
             ?.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)
             ?.firstOrNull { display ->
-                display.displayId != Display.DEFAULT_DISPLAY && display.name != "HiddenDisplay"
+                display.displayId != currentDisplay.displayId && display.name != "HiddenDisplay"
             }
     }
 }
@@ -152,7 +155,7 @@ private class ExternalInputPresentation(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
-                    setBackgroundColor(EXTERNAL_TOUCHPAD_BG)
+                    setBackgroundColor(ContextCompat.getColor(context, EXTERNAL_SURFACE_BG_RES))
                     touchpadViewProvider()?.let { primary ->
                         setSimTouchScreen(primary.isSimTouchScreen)
                     }
@@ -165,7 +168,7 @@ private class ExternalInputPresentation(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
-                    setBackgroundColor(EXTERNAL_KEYBOARD_BG)
+                    setBackgroundColor(ContextCompat.getColor(context, EXTERNAL_SURFACE_BG_RES))
                 }
 
                 val hintIcon = ImageView(context).apply {
@@ -218,7 +221,7 @@ private class HybridInputLayout(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
         )
-        setBackgroundColor(EXTERNAL_TOUCHPAD_BG)
+        setBackgroundColor(ContextCompat.getColor(context, EXTERNAL_SURFACE_BG_RES))
         touchpadViewProvider()?.let { primary ->
             setSimTouchScreen(primary.isSimTouchScreen)
         }
@@ -243,7 +246,7 @@ private class HybridInputLayout(
         }
         background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
-            setColor(0xFF3A3A3A.toInt())
+            setColor(ContextCompat.getColor(context, EXTERNAL_KEY_BG_RES))
         }
         setImageResource(R.drawable.icon_keyboard)
         scaleType = ImageView.ScaleType.CENTER_INSIDE

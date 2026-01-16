@@ -11,6 +11,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
+import androidx.core.content.ContextCompat
+import app.gamenative.R
 import com.winlator.xserver.XKeycode
 import com.winlator.xserver.XServer
 import kotlin.math.roundToInt
@@ -41,13 +43,18 @@ class ExternalOnScreenKeyboardView(
     private val keyButtons = mutableListOf<KeyButton>()
     private val downKeys = mutableSetOf<XKeycode>()
     private var shiftState: ShiftState = ShiftState.OFF
+    private val keyboardBackgroundColor: Int = ContextCompat.getColor(context, R.color.external_display_keyboard_background)
+    private val keyBackgroundColor: Int = ContextCompat.getColor(context, R.color.external_display_key_background)
+    private val keyHighlightColor: Int = ContextCompat.getColor(context, R.color.external_display_key_highlight_background)
+    private val keyHighlightStrongColor: Int =
+        ContextCompat.getColor(context, R.color.external_display_key_highlight_strong_background)
 
     init {
         orientation = VERTICAL
         setMotionEventSplittingEnabled(true)
         val padding = dp(8)
         setPadding(padding, padding, padding, padding)
-        setBackgroundColor(0xFF1F1F1F.toInt())
+        setBackgroundColor(keyboardBackgroundColor)
         buildLayout()
         refreshLabels()
     }
@@ -292,10 +299,10 @@ class ExternalOnScreenKeyboardView(
     ): StateListDrawable {
         val radius = dp(8).toFloat()
         val baseColor = when {
-            highlight && strong -> 0xFF2E5AAC.toInt()
-            highlight -> 0xFF3D6CC4.toInt()
-            normal -> 0xFF3A3A3A.toInt()
-            else -> 0xFF3A3A3A.toInt()
+            highlight && strong -> keyHighlightStrongColor
+            highlight -> keyHighlightColor
+            normal -> keyBackgroundColor
+            else -> keyBackgroundColor
         }
 
         val pressedColor = blendColor(baseColor, Color.WHITE, 0.18f)

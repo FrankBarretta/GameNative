@@ -527,6 +527,8 @@
     <string name="external_display_mode_touchpad">Use as touchpad surface</string>
     <string name="external_display_mode_keyboard">Use as full keyboard</string>
     <string name="external_display_mode_hybrid">Hybrid (touchpad + keyboard button)</string>
+    <string name="external_display_swap">Show Game on External Display</string>
+    <string name="external_display_swap_subtitle">Swap screens so the game renders on the external display and this device becomes the controller surface</string>
     <string name="start_with_controls_hidden">Start With On-Screen Controls Hidden</string>
     <string name="start_with_controls_hidden_description">On-screen controls will be hidden when the game starts. Toggle via the navigation menu.</string>
     <string name="emulate_keyboard_mouse">Emulate keyboard and mouse</string>
