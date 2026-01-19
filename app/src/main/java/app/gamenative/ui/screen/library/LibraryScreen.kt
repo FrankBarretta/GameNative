@@ -327,12 +327,15 @@ private fun LibraryScreenContent(
             // Use Box to allow content to scroll behind the tab bar
             Box(modifier = Modifier.fillMaxSize()) {
                 // Library list (content scrolls behind tab bar)
-                LibraryListPane(
+                    LibraryListPane(
                     state = state,
                     listState = listState,
                     currentLayout = currentPaneType,
                     onPageChange = onPageChange,
-                    onNavigate = { appId -> selectedAppId = appId },
+                        onNavigate = { appId ->
+                            selectedAppId = appId
+                            selectedLibraryItem = state.appInfoList.firstOrNull { it.appId == appId }
+                        },
                     onRefresh = onRefresh,
                     modifier = Modifier.fillMaxSize(),
                 )
