@@ -433,7 +433,7 @@ class LibraryViewModel @Inject constructor(
             val includeGOG = if (currentTab == app.gamenative.ui.enums.LibraryTab.ALL) {
                 _state.value.showGOGInLibrary
             } else {
-                currentTab.showCustom
+                currentTab.showGoG
             }
 
             // Combine both lists and apply sort option
