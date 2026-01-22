@@ -549,8 +549,9 @@ fun XServerScreen(
                 keyboard = Keyboard(getxServer())
                 if (!bootToContainer) {
                     renderer.setUnviewableWMClasses("explorer.exe")
-                    // TODO: make 'force fullscreen' be an option of the app being launched
-                    appLaunchInfo?.let { renderer.forceFullscreenWMClass = Paths.get(it.executable).name }
+                    if (!testGraphics && container.executablePath.isNotEmpty()) {
+                        renderer.forceFullscreenWMClass = Paths.get(container.executablePath).name
+                    }
                 }
                 getxServer().windowManager.addOnWindowModificationListener(
                     object : WindowManager.OnWindowModificationListener {
@@ -1556,7 +1557,7 @@ private fun setupXEnvironment(
         val wow64Mode = container.isWoW64Mode
         guestProgramLauncherComponent.setContainer(container);
         guestProgramLauncherComponent.setWineInfo(xServerState.value.wineInfo);
-        val guestExecutable = "wine explorer /desktop=shell," + xServer.screenInfo + " " +
+        val guestExecutable = "wine " +
             getWineStartCommand(appId, container, bootToContainer, testGraphics, appLaunchInfo, envVars, guestProgramLauncherComponent) +
             (if (container.execArgs.isNotEmpty()) " " + container.execArgs else "")
         guestProgramLauncherComponent.isWoW64Mode = wow64Mode
