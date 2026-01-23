@@ -708,6 +708,8 @@ object ContainerUtils {
 				enableDInput = PrefManager.dinputEnabled,
 				dinputMapperType = PrefManager.dinputMapperType.toByte(),
                 disableMouseInput = PrefManager.disableMouseInput,
+                externalDisplayMode = PrefManager.externalDisplayInputMode,
+                externalDisplaySwap = PrefManager.externalDisplaySwap,
             )
         }
 
