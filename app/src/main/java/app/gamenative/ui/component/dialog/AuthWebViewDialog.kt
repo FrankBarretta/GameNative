@@ -111,9 +111,6 @@ fun AuthWebViewDialog(
                                     allowFileAccessFromFileURLs = false
                                     allowUniversalAccessFromFileURLs = false
                                     mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-
-                                    // User agent for OAuth providers
-                                    userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/200.0"
                                 }
 
                                 webViewClient = object : WebViewClient() {
