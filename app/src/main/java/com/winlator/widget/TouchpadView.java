@@ -59,6 +59,9 @@ public class TouchpadView extends View implements View.OnCapturedPointerListener
 
     private boolean pressExecuted;
 
+    private float lastExternalMouseX = Float.NaN;
+    private float lastExternalMouseY = Float.NaN;
+
     public TouchpadView(Context context, XServer xServer, boolean capturePointerOnExternalMouse) {
         super(context);
         this.fingers = new Finger[4];
@@ -296,11 +299,29 @@ public class TouchpadView extends View implements View.OnCapturedPointerListener
                 break;
             case MotionEvent.ACTION_MOVE:
                 if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
-                    float[] transformedPoint = XForm.transformPoint(xform, event.getX(), event.getY());
-                    if (xServer.isRelativeMouseMovement())
-                        xServer.getWinHandler().mouseEvent(MouseEventFlags.MOVE, (int)transformedPoint[0], (int)transformedPoint[1], 0);
-                    else
-                        xServer.injectPointerMove((int)transformedPoint[0], (int)transformedPoint[1]);
+                    float x = event.getX();
+                    float y = event.getY();
+                    if (xServer.isRelativeMouseMovement()) {
+                        int dx = 0;
+                        int dy = 0;
+                        if (Float.isFinite(lastExternalMouseX) && Float.isFinite(lastExternalMouseY)) {
+                            float[] delta = computeDeltaPoint(lastExternalMouseX, lastExternalMouseY, x, y);
+                            float dxf = delta[0] * sensitivity;
+                            float dyf = delta[1] * sensitivity;
+                            if (Math.abs(dxf) > CURSOR_ACCELERATION_THRESHOLD) dxf *= CURSOR_ACCELERATION;
+                            if (Math.abs(dyf) > CURSOR_ACCELERATION_THRESHOLD) dyf *= CURSOR_ACCELERATION;
+                            dx = Mathf.roundPoint(dxf);
+                            dy = Mathf.roundPoint(dyf);
+                        }
+                        lastExternalMouseX = x;
+                        lastExternalMouseY = y;
+                        xServer.getWinHandler().mouseEvent(MouseEventFlags.MOVE, dx, dy, 0);
+                    } else {
+                        lastExternalMouseX = Float.NaN;
+                        lastExternalMouseY = Float.NaN;
+                        float[] transformedPoint = XForm.transformPoint(xform, x, y);
+                        xServer.injectPointerMove((int) transformedPoint[0], (int) transformedPoint[1]);
+                    }
                 } else {
                     for (byte i = 0; i < MAX_FINGERS; i++) {
                         if (fingers[i] != null) {
@@ -603,6 +624,8 @@ public class TouchpadView extends View implements View.OnCapturedPointerListener
             int actionButton = event.getActionButton();
             switch (event.getAction()) {
                 case MotionEvent.ACTION_BUTTON_PRESS:
+                    lastExternalMouseX = Float.NaN;
+                    lastExternalMouseY = Float.NaN;
                     if (actionButton == MotionEvent.BUTTON_PRIMARY) {
                         if (xServer.isRelativeMouseMovement())
                             xServer.getWinHandler().mouseEvent(MouseEventFlags.LEFTDOWN, 0, 0, 0);
@@ -622,6 +645,8 @@ public class TouchpadView extends View implements View.OnCapturedPointerListener
                     handled = true;
                     break;
                 case MotionEvent.ACTION_BUTTON_RELEASE:
+                    lastExternalMouseX = Float.NaN;
+                    lastExternalMouseY = Float.NaN;
                     if (actionButton == MotionEvent.BUTTON_PRIMARY) {
                         if (xServer.isRelativeMouseMovement())
                             xServer.getWinHandler().mouseEvent(MouseEventFlags.LEFTUP, 0, 0, 0);
@@ -642,11 +667,29 @@ public class TouchpadView extends View implements View.OnCapturedPointerListener
                     break;
                 case MotionEvent.ACTION_MOVE:
                 case MotionEvent.ACTION_HOVER_MOVE:
-                    float[] transformedPoint = XForm.transformPoint(xform, event.getX(), event.getY());
-                    if (xServer.isRelativeMouseMovement())
-                        xServer.getWinHandler().mouseEvent(MouseEventFlags.MOVE, (int)transformedPoint[0], (int)transformedPoint[1], 0);
-                    else
-                        xServer.injectPointerMove((int)transformedPoint[0], (int)transformedPoint[1]);
+                    float x = event.getX();
+                    float y = event.getY();
+                    if (xServer.isRelativeMouseMovement()) {
+                        int dx = 0;
+                        int dy = 0;
+                        if (Float.isFinite(lastExternalMouseX) && Float.isFinite(lastExternalMouseY)) {
+                            float[] delta = computeDeltaPoint(lastExternalMouseX, lastExternalMouseY, x, y);
+                            float dxf = delta[0] * sensitivity;
+                            float dyf = delta[1] * sensitivity;
+                            if (Math.abs(dxf) > CURSOR_ACCELERATION_THRESHOLD) dxf *= CURSOR_ACCELERATION;
+                            if (Math.abs(dyf) > CURSOR_ACCELERATION_THRESHOLD) dyf *= CURSOR_ACCELERATION;
+                            dx = Mathf.roundPoint(dxf);
+                            dy = Mathf.roundPoint(dyf);
+                        }
+                        lastExternalMouseX = x;
+                        lastExternalMouseY = y;
+                        xServer.getWinHandler().mouseEvent(MouseEventFlags.MOVE, dx, dy, 0);
+                    } else {
+                        lastExternalMouseX = Float.NaN;
+                        lastExternalMouseY = Float.NaN;
+                        float[] transformedPoint = XForm.transformPoint(xform, x, y);
+                        xServer.injectPointerMove((int) transformedPoint[0], (int) transformedPoint[1]);
+                    }
                     handled = true;
                     break;
                 case MotionEvent.ACTION_SCROLL:
