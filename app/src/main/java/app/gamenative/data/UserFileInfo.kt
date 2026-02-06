@@ -21,12 +21,15 @@ data class UserFileInfo(
     val sha: ByteArray,
 ) {
     val prefix: String
-        get() = Paths.get("%${root.name}%$path").pathString
+        get() = Paths.get("%${root.name}%${ if (path == ".") "" else path }").pathString
             .replace("{64BitSteamID}", SteamUtils.getSteamId64().toString())
             .replace("{Steam3AccountID}", SteamUtils.getSteam3AccountId().toString())
 
     val prefixPath: String
-        get() = Paths.get(prefix, filename).pathString
+        get() = (
+            if (prefix.endsWith('%')) "$prefix$filename"
+            else Paths.get(prefix, filename).pathString
+        )
             .replace("{64BitSteamID}", SteamUtils.getSteamId64().toString())
             .replace("{Steam3AccountID}", SteamUtils.getSteam3AccountId().toString())
 
