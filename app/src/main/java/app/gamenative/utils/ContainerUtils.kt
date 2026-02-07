@@ -713,7 +713,7 @@ object ContainerUtils {
                                     context,
                                     bestConfig.bestConfig,
                                     bestConfig.matchType,
-                                    false,
+                                    true,
                                 )
                                 if (parsedConfig != null && parsedConfig.isNotEmpty()) {
                                     bestConfigMap = parsedConfig
@@ -791,20 +791,9 @@ object ContainerUtils {
             )
         }
 
-        // Apply best config map to containerData if available
-        // Note: When applyKnownConfig=false (container creation), map only contains executablePath, useLegacyDRM, and unpackFiles
-        // When applyKnownConfig=true, map contains all validated fields from the best config
+        // Apply best config map to containerData if available (full validated config on first run when components exist)
         containerData = if (bestConfigMap != null && bestConfigMap.isNotEmpty()) {
-            var updatedData = containerData
-            bestConfigMap.forEach { (key, value) ->
-                updatedData = when (key) {
-                    "executablePath" -> value?.let { updatedData.copy(executablePath = it as? String ?: updatedData.executablePath) } ?: updatedData
-                    "useLegacyDRM" -> value?.let { updatedData.copy(useLegacyDRM = it as? Boolean ?: updatedData.useLegacyDRM) } ?: updatedData
-                    "unpackFiles" -> value?.let { updatedData.copy(unpackFiles = it as? Boolean ?: updatedData.unpackFiles) } ?: updatedData
-                    else -> updatedData
-                }
-            }
-            updatedData
+            applyBestConfigMapToContainerData(containerData, bestConfigMap)
         } else {
             containerData
         }
