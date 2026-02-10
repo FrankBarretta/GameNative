@@ -854,7 +854,7 @@ class SteamAutoCloudTest {
     }
 
     @Test
-    fun testGameInstallDownloadBug() = runBlocking {
+    fun testNoPrefixDownload() = runBlocking {
         // Clear existing files and database state
         saveFilesDir.listFiles()?.forEach { it.delete() }
         runBlocking {
@@ -879,7 +879,7 @@ class SteamAutoCloudTest {
             .map {
                 val file = mock<AppFileInfo>()
                 // Bug is that the prefix is in the file.filename
-                whenever(file.filename).thenReturn("%GameInstall%save$it.dat")
+                whenever(file.filename).thenReturn("%GameInstall%/save$it.dat")
                 whenever(file.shaFile).thenReturn(hashes[it])
                 whenever(file.pathPrefixIndex).thenReturn(0)
                 whenever(file.timestamp).thenReturn(Date())
@@ -996,7 +996,7 @@ class SteamAutoCloudTest {
     }
 
     @Test
-    fun testGameInstallUploadBug() = runBlocking {
+    fun testNoPrefixUpload() = runBlocking {
         val testApp = db.steamAppDao().findApp(steamAppId)!!
 
         // Set local change number to match cloud (e.g., both 5)
@@ -1011,7 +1011,7 @@ class SteamAutoCloudTest {
             val oldFileSha = CryptoHelper.shaHash(oldFileContent)
             val oldUserFile1 = app.gamenative.data.UserFileInfo(
                 root = PathType.GameInstall,
-                path = ".",
+                path = "",
                 filename = "save1.sav",
                 timestamp = System.currentTimeMillis() - 10000,
                 sha = oldFileSha
@@ -1035,7 +1035,7 @@ class SteamAutoCloudTest {
             ),
             SaveFilePattern(
                 root = PathType.GameInstall,
-                path = ".",
+                path = "",
                 pattern = "save1.sav",
             ),
             SaveFilePattern(

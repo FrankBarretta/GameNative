@@ -20,16 +20,20 @@ data class UserFileInfo(
     val timestamp: Long,
     val sha: ByteArray,
 ) {
+    // "." and blank path both mean "root of path type" per Steam manifest.
     val prefix: String
-        get() = Paths.get("%${root.name}%${ if (path == ".") "" else path }").pathString
-            .replace("{64BitSteamID}", SteamUtils.getSteamId64().toString())
-            .replace("{Steam3AccountID}", SteamUtils.getSteam3AccountId().toString())
+        get() {
+            val pathForPrefix = when {
+                path.isBlank() || path == "." -> ""
+                else -> path
+            }
+            return Paths.get("%${root.name}%$pathForPrefix").pathString
+                .replace("{64BitSteamID}", SteamUtils.getSteamId64().toString())
+                .replace("{Steam3AccountID}", SteamUtils.getSteam3AccountId().toString())
+        }
 
     val prefixPath: String
-        get() = (
-            if (prefix.endsWith('%')) "$prefix$filename"
-            else Paths.get(prefix, filename).pathString
-        )
+        get() = Paths.get(prefix, filename).pathString
             .replace("{64BitSteamID}", SteamUtils.getSteamId64().toString())
             .replace("{Steam3AccountID}", SteamUtils.getSteam3AccountId().toString())
 
