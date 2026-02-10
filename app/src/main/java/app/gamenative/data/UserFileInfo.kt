@@ -32,9 +32,12 @@ data class UserFileInfo(
                 .replace("{Steam3AccountID}", SteamUtils.getSteam3AccountId().toString())
         }
 
+    // Bare placeholder (%GameInstall%) expects no slash before filename; path with folder uses Paths.get.
     val prefixPath: String
-        get() = Paths.get(prefix, filename).pathString
-            .replace("{64BitSteamID}", SteamUtils.getSteamId64().toString())
+        get() = when {
+            path.isBlank() || path == "." -> "$prefix$filename"
+            else -> Paths.get(prefix, filename).pathString
+        }.replace("{64BitSteamID}", SteamUtils.getSteamId64().toString())
             .replace("{Steam3AccountID}", SteamUtils.getSteam3AccountId().toString())
 
     val substitutedPath: String

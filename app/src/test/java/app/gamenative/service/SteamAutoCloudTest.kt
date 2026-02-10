@@ -554,8 +554,21 @@ class SteamAutoCloudTest {
         whenever(mockUploadBatchResponse.batchID).thenReturn(1)
         whenever(mockUploadBatchResponse.appChangeNumber).thenReturn((matchingChangeNumber + 1).toLong())
 
-        every { mockSteamCloud.beginAppUploadBatch(any(), any(), any(), any(), any(), any(), any()) } returns
+        val capturedFilesToDelete = mutableListOf<List<String>>()
+        val capturedFilesToUpload = mutableListOf<List<String>>()
+        every {
+            mockSteamCloud.beginAppUploadBatch(any(), any(), any(), any(), any(), any(), any())
+        } answers {
+            for (i in args.indices) {
+                val a = args[i]
+                if (a is List<*> && a.all { it is String }) {
+                    val list = a as List<String>
+                    if (capturedFilesToUpload.isEmpty()) capturedFilesToUpload.add(list)
+                    else capturedFilesToDelete.add(list)
+                }
+            }
             CompletableFuture.completedFuture(mockUploadBatchResponse)
+        }
 
         val mockFileUploadInfo = mock<`in`.dragonbra.javasteam.steam.handlers.steamcloud.FileUploadInfo>()
         whenever(mockFileUploadInfo.blockRequests).thenReturn(emptyList())
@@ -602,6 +615,12 @@ class SteamAutoCloudTest {
         assertTrue("Uploads should be completed", result.uploadsCompleted)
         assertEquals("Should upload 2 files (1 modified + 1 new)", 2, result.filesUploaded)
         assertEquals("Sync result should be Success", SyncResult.Success, result.syncResult)
+
+        // Verify prefixPath: path with folder uses Paths.get (slash before filename)
+        val filesToUpload = capturedFilesToUpload.singleOrNull() ?: emptyList()
+        val expectedPrefix = "%WinMyDocuments%My Games/TestGame/Steam/76561198025127569"
+        assertTrue("prefixPath for SaveData_0.sav should include path", filesToUpload.any { it.endsWith("/SaveData_0.sav") && it.contains(expectedPrefix) })
+        assertTrue("prefixPath for SaveData_New.sav should include path", filesToUpload.any { it.endsWith("/SaveData_New.sav") && it.contains(expectedPrefix) })
 
         // Verify database was updated with new change number
         val changeNumber = db.appChangeNumbersDao().getByAppId(steamAppId)
@@ -1069,8 +1088,21 @@ class SteamAutoCloudTest {
         whenever(mockUploadBatchResponse.batchID).thenReturn(1)
         whenever(mockUploadBatchResponse.appChangeNumber).thenReturn((matchingChangeNumber + 1).toLong())
 
-        every { mockSteamCloud.beginAppUploadBatch(any(), any(), any(), any(), any(), any(), any()) } returns
-                CompletableFuture.completedFuture(mockUploadBatchResponse)
+        val capturedFilesToDelete = mutableListOf<List<String>>()
+        val capturedFilesToUpload = mutableListOf<List<String>>()
+        every {
+            mockSteamCloud.beginAppUploadBatch(any(), any(), any(), any(), any(), any(), any())
+        } answers {
+            for (i in args.indices) {
+                val a = args[i]
+                if (a is List<*> && a.all { it is String }) {
+                    val list = a as List<String>
+                    if (capturedFilesToUpload.isEmpty()) capturedFilesToUpload.add(list)
+                    else capturedFilesToDelete.add(list)
+                }
+            }
+            CompletableFuture.completedFuture(mockUploadBatchResponse)
+        }
 
         val mockFileUploadInfo = mock<`in`.dragonbra.javasteam.steam.handlers.steamcloud.FileUploadInfo>()
         whenever(mockFileUploadInfo.blockRequests).thenReturn(emptyList())
@@ -1110,6 +1142,13 @@ class SteamAutoCloudTest {
         assertTrue("Uploads should be completed", result.uploadsCompleted)
         assertEquals("Should upload 2 files (1 new + 1 modify)", 2, result.filesUploaded)
         assertEquals("Sync result should be Success", SyncResult.Success, result.syncResult)
+
+        // Verify prefixPath: bare placeholder (%GameInstall%) must have no slash before filename
+        val filesToUpload = capturedFilesToUpload.singleOrNull() ?: emptyList()
+        assertTrue("prefixPath for save0.sav should be %GameInstall%save0.sav (no slash)", filesToUpload.contains("%GameInstall%save0.sav"))
+        assertTrue("prefixPath for save1.sav should be %GameInstall%save1.sav (no slash)", filesToUpload.contains("%GameInstall%save1.sav"))
+        val filesToDelete = capturedFilesToDelete.singleOrNull() ?: emptyList()
+        assertTrue("prefixPath for deleted save2.sav should be %GameInstall%save2.sav (no slash)", filesToDelete.contains("%GameInstall%save2.sav"))
 
         // Verify database was updated with new change number
         val changeNumber = db.appChangeNumbersDao().getByAppId(steamAppId)
