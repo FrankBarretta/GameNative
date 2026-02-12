@@ -5,6 +5,7 @@ import app.gamenative.PrefManager
 import app.gamenative.data.GameSource
 import app.gamenative.enums.Marker
 import app.gamenative.service.SteamService
+import app.gamenative.service.amazon.AmazonService
 import app.gamenative.service.epic.EpicService
 import app.gamenative.service.gog.GOGConstants
 import app.gamenative.service.gog.GOGService
@@ -638,6 +639,24 @@ object ContainerUtils {
                     } else {
                         Timber.tag("Epic").w("Epic game $gameId has empty install path, using default drives")
                     }
+                    defaultDrives
+                }
+            }
+
+            GameSource.AMAZON -> {
+                // For Amazon games, map the specific game directory to A: drive
+                val gameId = extractGameIdFromContainerId(appId)
+                val installPath = AmazonService.getInstance()?.getInstalledGamePath(gameId)
+
+                if (installPath != null && installPath.isNotEmpty()) {
+                    val drive: Char = if (defaultDrives.contains("A:")) {
+                        Container.getNextAvailableDriveLetter(defaultDrives)
+                    } else {
+                        'A'
+                    }
+                    "$defaultDrives$drive:$installPath"
+                } else {
+                    Timber.w("Could not find Amazon game install path for: $gameId, using default drives")
                     defaultDrives
                 }
             }

@@ -185,6 +185,9 @@ class LibraryViewModel @Inject constructor(
                 PrefManager.showEpicInLibrary = newValue
                 _state.update { it.copy(showEpicInLibrary = newValue) }
             }
+            GameSource.AMAZON -> {
+                // Amazon toggle - add prefs if needed later
+            }
         }
         onFilterApps(paginationCurrentPage)
     }

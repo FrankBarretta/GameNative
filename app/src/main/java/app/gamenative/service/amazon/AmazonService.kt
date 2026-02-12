@@ -72,11 +72,8 @@ class AmazonService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = notificationHelper.createForegroundNotification(
-            title = "Amazon Games",
-            message = "Running"
-        )
-        startForeground(NotificationHelper.NOTIFICATION_ID_FOREGROUND, notification)
+        val notification = notificationHelper.createForegroundNotification("Amazon Games Running")
+        startForeground(1, notification)
 
         if (intent?.action == ACTION_SYNC_LIBRARY) {
             serviceScope.launch {

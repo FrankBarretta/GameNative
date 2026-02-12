@@ -191,6 +191,7 @@ fun AppScreen(
             app.gamenative.data.GameSource.CUSTOM_GAME -> CustomGameAppScreen()
             app.gamenative.data.GameSource.GOG -> GOGAppScreen()
             app.gamenative.data.GameSource.EPIC -> EpicAppScreen()
+            app.gamenative.data.GameSource.AMAZON -> CustomGameAppScreen() // Use CustomGameAppScreen for now
         }
     }
 
