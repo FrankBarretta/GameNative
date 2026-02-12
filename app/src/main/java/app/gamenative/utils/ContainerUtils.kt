@@ -1024,6 +1024,7 @@ object ContainerUtils {
             containerId.startsWith("CUSTOM_GAME_") -> GameSource.CUSTOM_GAME
             containerId.startsWith("GOG_") -> GameSource.GOG
             containerId.startsWith("EPIC_") -> GameSource.EPIC
+            containerId.startsWith("AMAZON_") -> GameSource.AMAZON
             // Add other platforms here..
             else -> GameSource.STEAM // default fallback
         }

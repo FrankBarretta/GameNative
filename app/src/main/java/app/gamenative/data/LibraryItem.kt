@@ -7,7 +7,8 @@ enum class GameSource {
     STEAM,
     CUSTOM_GAME,
     GOG,
-    EPIC
+    EPIC,
+    AMAZON
     // Add other platforms here..
 }
 
@@ -57,6 +58,9 @@ data class LibraryItem(
                 }
             }
             GameSource.EPIC -> {
+                iconHash
+            }
+            GameSource.AMAZON -> {
                 iconHash
             }
         }

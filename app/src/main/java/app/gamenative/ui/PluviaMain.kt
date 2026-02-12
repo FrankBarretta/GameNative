@@ -225,6 +225,10 @@ fun PluviaMain(
                                             EpicService.isGameInstalled(gameId)
                                         }
 
+                                        GameSource.AMAZON -> {
+                                            app.gamenative.service.amazon.AmazonService.isGameInstalled(gameId.toString())
+                                        }
+
                                         GameSource.CUSTOM_GAME -> {
                                             CustomGameScanner.isGameInstalled(gameId)
                                         }
@@ -414,6 +418,14 @@ fun PluviaMain(
             ) {
                 Timber.d("[PluviaMain]: Starting EpicService for logged-in user")
                 app.gamenative.service.epic.EpicService.start(context)
+            }
+
+            // Start AmazonService if user has Amazon credentials
+            if (app.gamenative.service.amazon.AmazonService.hasStoredCredentials(context) &&
+                !app.gamenative.service.amazon.AmazonService.isRunning
+            ) {
+                Timber.d("[PluviaMain]: Starting AmazonService for logged-in user")
+                app.gamenative.service.amazon.AmazonService.start(context)
             }
 
             if (SteamService.isLoggedIn && !SteamService.keepAlive && navController.currentDestination?.route == PluviaScreen.LoginUser.route) {

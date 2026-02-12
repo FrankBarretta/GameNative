@@ -2102,6 +2102,40 @@ private fun getWineStartCommand(
         Timber.tag("XServerScreen").i("Epic launch command: $redactedCommand")
 
         return launchCommand
+    } else if (gameSource == GameSource.AMAZON) {
+        // For Amazon games, get install path from nile
+        Timber.tag("XServerScreen").i("Launching Amazon game: $gameId")
+        
+        val amazonService = app.gamenative.service.amazon.AmazonService.getInstance()
+        val installPath = amazonService?.getInstalledGamePath(gameId.toString())
+        
+        if (installPath.isNullOrEmpty()) {
+            Timber.tag("XServerScreen").e("Cannot launch: Amazon game not installed")
+            return "\"explorer.exe\""
+        }
+        
+        // Find executable (largest .exe in install path)
+        val exeFile = File(installPath).walk()
+            .filter { it.extension.equals("exe", ignoreCase = true) }
+            .filter { file -> 
+                val name = file.name.lowercase()
+                !name.contains("unins") && !name.contains("setup") && !name.contains("crash")
+            }
+            .maxByOrNull { it.length() }
+        
+        if (exeFile == null) {
+            Timber.tag("XServerScreen").e("Cannot find executable for Amazon game")
+            return "\"explorer.exe\""
+        }
+        
+        val relativePath = exeFile.relativeTo(File(installPath)).path.replace("/", "\\")
+        val amazonCommand = "A:\\$relativePath"
+        
+        val executableDir = installPath + "/" + relativePath.substringBeforeLast("\\", "")
+        guestProgramLauncherComponent.workingDir = File(executableDir)
+        
+        Timber.tag("XServerScreen").i("Amazon launch command: \"$amazonCommand\"")
+        return "winhandler.exe \"$amazonCommand\""
     } else if (isCustomGame) {
         // For Custom Games, we can launch even without appLaunchInfo
         // Use the executable path from container config. If missing, try to auto-detect
