@@ -645,7 +645,8 @@ object ContainerUtils {
 
             GameSource.AMAZON -> {
                 // For Amazon games, map the specific game directory to A: drive
-                val gameId = extractGameIdFromContainerId(appId)
+                // Amazon game IDs are alphanumeric strings, not integers
+                val gameId = appId.removePrefix("AMAZON_").substringBefore("(")
                 val installPath = AmazonService.getInstance()?.getInstalledGamePath(gameId)
 
                 if (installPath != null && installPath.isNotEmpty()) {
