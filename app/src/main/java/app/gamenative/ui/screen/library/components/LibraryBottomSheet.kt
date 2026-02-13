@@ -45,6 +45,7 @@ fun LibraryBottomSheet(
     showCustomGames: Boolean,
     showGOG: Boolean,
     showEpic: Boolean,
+    showAmazon: Boolean,
     onSourceToggle: (app.gamenative.data.GameSource) -> Unit,
 ) {
     Column(
@@ -130,6 +131,18 @@ fun LibraryBottomSheet(
                     )
                 },
             )
+            FlowFilterChip(
+                onClick = { onSourceToggle(GameSource.AMAZON) },
+                label = { Text(text = "Amazon") },
+                selected = showAmazon,
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.Folder,
+                        contentDescription = "Amazon",
+                        modifier = Modifier.size(24.dp)
+                    )
+                },
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -182,6 +195,7 @@ private fun Preview_LibraryBottomSheet() {
                 showCustomGames = true,
                 showGOG = true,
                 showEpic = true,
+                showAmazon = true,
                 onSourceToggle = { },
             )
         }

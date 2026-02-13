@@ -504,7 +504,44 @@ fun SettingsGroupInterface(
         }
     }
 
+    // Amazon Games logout confirmation dialog state
+    var showAmazonLogoutDialog by rememberSaveable { mutableStateOf(false) }
+    var amazonLogoutLoading by rememberSaveable { mutableStateOf(false) }
 
+    // Amazon Games Integration
+    SettingsGroup(title = { Text(text = stringResource(R.string.amazon_integration_title)) }) {
+        if (!app.gamenative.service.amazon.AmazonService.hasStoredCredentials(context)) {
+            SettingsMenuLink(
+                icon = { androidx.compose.material3.Icon(Icons.Default.Login, contentDescription = null) },
+                colors = settingsTileColorsAlt(),
+                title = { Text(text = stringResource(R.string.amazon_settings_login_title)) },
+                subtitle = { Text(text = stringResource(R.string.amazon_settings_login_subtitle)) },
+                onClick = {
+                    // For now, show a message that login needs to be done via CLI
+                    // TODO: Implement Amazon OAuth flow when ready
+                    coroutineScope.launch {
+                        android.widget.Toast.makeText(
+                            context,
+                            "Amazon login requires nile CLI setup. Please configure nile authentication manually.",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            )
+        }
+        // Amazon Logout Button
+        if (app.gamenative.service.amazon.AmazonService.hasStoredCredentials(context)) {
+            SettingsMenuLink(
+                icon = { androidx.compose.material3.Icon(Icons.Default.Logout, contentDescription = null) },
+                title = { Text(text = stringResource(R.string.amazon_settings_logout_title)) },
+                subtitle = { Text(text = stringResource(R.string.amazon_settings_logout_subtitle)) },
+                onClick = {
+                    showAmazonLogoutDialog = true
+                },
+                colors = settingsTileColorsAlt()
+            )
+        }
+    }
 
     // Downloads settings
     SettingsGroup(title = { Text(text = stringResource(R.string.settings_downloads_title)) }) {
@@ -905,6 +942,61 @@ fun SettingsGroupInterface(
         visible = epicLogoutLoading,
         progress = -1f,
         message = stringResource(R.string.epic_logout_in_progress)
+    )
+
+    // Amazon logout confirmation dialog
+    MessageDialog(
+        visible = showAmazonLogoutDialog,
+        title = stringResource(R.string.amazon_logout_confirm_title),
+        message = stringResource(R.string.amazon_logout_confirm_message),
+        confirmBtnText = stringResource(R.string.amazon_logout_confirm),
+        dismissBtnText = stringResource(R.string.cancel),
+        onConfirmClick = {
+            showAmazonLogoutDialog = false
+            amazonLogoutLoading = true
+            coroutineScope.launch {
+                try {
+                    Timber.d("[SettingsAmazon]: Starting logout...")
+                    // Remove nile credentials file
+                    val userFile = java.io.File(context.getExternalFilesDir(null)?.parent, ".config/nile/user.json")
+                    if (userFile.exists()) {
+                        userFile.delete()
+                    }
+                    // Stop service if running
+                    if (app.gamenative.service.amazon.AmazonService.isRunning) {
+                        app.gamenative.service.amazon.AmazonService.stop()
+                    }
+                    withContext(Dispatchers.Main) {
+                        amazonLogoutLoading = false
+                        Timber.i("[SettingsAmazon]: ✓ Logout successful!")
+                        android.widget.Toast.makeText(
+                            context,
+                            context.getString(R.string.amazon_logout_success),
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "[SettingsAmazon]: Logout exception: ${e.message}")
+                    withContext(Dispatchers.Main) {
+                        amazonLogoutLoading = false
+                        android.widget.Toast.makeText(
+                            context,
+                            context.getString(R.string.amazon_logout_failed, e.message ?: "Unknown"),
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            }
+        },
+        onDismissRequest = { showAmazonLogoutDialog = false },
+        onDismissClick = { showAmazonLogoutDialog = false }
+    )
+
+    // Amazon logout loading dialog
+    LoadingDialog(
+        visible = amazonLogoutLoading,
+        progress = -1f,
+        message = stringResource(R.string.amazon_logout_in_progress)
     )
 
 }

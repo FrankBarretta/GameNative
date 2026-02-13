@@ -504,6 +504,7 @@
     <string name="graphics_driver_version">Graphics Driver Version</string>
     <string name="exposed_vulkan_extensions">Exposed Vulkan Extensions</string>
     <string name="max_device_memory">Max Device Memory</string>
+    <string name="frame_synchronization">Frame Synchronization</string>
     <string name="use_adrenotools_turnip">Use Adrenotools Turnip</string>
     <string name="vulkan_version">Vulkan Version</string>
     <string name="image_cache_size">Image Cache Size</string>
@@ -1009,6 +1010,21 @@
     <string name="epic_logout_success">Logged out from Epic Games successfully</string>
     <string name="epic_logout_failed">Failed to logout: %s</string>
     <string name="epic_logout_in_progress">Logging out from Epic Games…</string>
+
+    <!-- Amazon Games Integration -->
+    <string name="amazon_integration_title">Amazon Games Integration (Alpha)</string>
+    <string name="amazon_settings_login_title">Sign in</string>
+    <string name="amazon_settings_login_subtitle">Sign in to your Amazon Games account</string>
+    <string name="amazon_login_success_title">Login Successful</string>
+    <string name="amazon_login_cancel">Cancel</string>
+    <string name="amazon_settings_logout_title">Logout</string>
+    <string name="amazon_settings_logout_subtitle">Sign out from your Amazon Games account</string>
+    <string name="amazon_logout_confirm_title">Logout from Amazon Games?</string>
+    <string name="amazon_logout_confirm_message">This will remove your Amazon Games credentials and clear your Amazon library from this device. You can sign in again at any time.</string>
+    <string name="amazon_logout_confirm">Logout</string>
+    <string name="amazon_logout_success">Logged out from Amazon Games successfully</string>
+    <string name="amazon_logout_failed">Failed to logout: %s</string>
+    <string name="amazon_logout_in_progress">Logging out from Amazon Games…</string>
 
     <string name="manifest_downloading_item">Downloading %1$s...</string>
     <string name="manifest_download_failed">Download failed: %1$s</string>

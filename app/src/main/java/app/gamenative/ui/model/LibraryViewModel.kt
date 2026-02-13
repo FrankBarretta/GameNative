@@ -186,7 +186,9 @@ class LibraryViewModel @Inject constructor(
                 _state.update { it.copy(showEpicInLibrary = newValue) }
             }
             GameSource.AMAZON -> {
-                // Amazon toggle - add prefs if needed later
+                val newValue = !current.showAmazonInLibrary
+                PrefManager.showAmazonInLibrary = newValue
+                _state.update { it.copy(showAmazonInLibrary = newValue) }
             }
         }
         onFilterApps(paginationCurrentPage)
@@ -439,6 +441,9 @@ class LibraryViewModel @Inject constructor(
                 )
             }
 
+            // Amazon games (TODO: Implement Amazon library sync)
+            val amazonEntries = emptyList<LibraryEntry>()
+
             // Calculate installed counts
             val gogInstalledCount = filteredGOGGames.count { it.isInstalled }
             val epicInstalledCount = filteredEpicGames.count { it.isInstalled }
@@ -459,6 +464,7 @@ class LibraryViewModel @Inject constructor(
             val includeOpen = _state.value.showCustomGamesInLibrary
             val includeGOG = _state.value.showGOGInLibrary
             val includeEpic = _state.value.showEpicInLibrary
+            val includeAmazon = _state.value.showAmazonInLibrary
 
             // Combine all lists and sort: installed games first, then alphabetically
             val combined = buildList<LibraryEntry> {
@@ -466,6 +472,7 @@ class LibraryViewModel @Inject constructor(
                 if (includeOpen) addAll(customEntries)
                 if (includeGOG) addAll(gogEntries)
                 if (includeEpic) addAll(epicEntries)
+                if (includeAmazon) addAll(amazonEntries)
             }.sortedWith(
                 // Primary sort: installed status (0 = installed at top, 1 = not installed at bottom)
                 // Secondary sort: alphabetically by name (case-insensitive)
