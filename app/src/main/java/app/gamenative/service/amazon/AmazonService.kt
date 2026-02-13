@@ -4,6 +4,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
+import app.gamenative.data.AmazonCredentials
 import app.gamenative.data.LibraryItem
 import app.gamenative.data.GameSource
 import app.gamenative.service.NotificationHelper
@@ -48,8 +49,22 @@ class AmazonService : Service() {
         }
 
         fun hasStoredCredentials(context: Context): Boolean {
-            val userFile = File(context.getExternalFilesDir(null)?.parent, ".config/nile/user.json")
-            return userFile.exists() && userFile.length() > 0
+            return AmazonAuthManager.hasStoredCredentials(context)
+        }
+
+        /**
+         * Authenticate with Amazon Games using PKCE authorization code.
+         * Called from the Settings UI after the WebView captures the code.
+         */
+        suspend fun authenticateWithCode(context: Context, authCode: String): Result<AmazonCredentials> {
+            return AmazonAuthManager.authenticateWithCode(context, authCode)
+        }
+
+        fun triggerLibrarySync(context: Context) {
+            val svc = instance ?: return
+            svc.serviceScope.launch {
+                svc.syncLibrary()
+            }
         }
 
         fun getInstance(): AmazonService? = instance

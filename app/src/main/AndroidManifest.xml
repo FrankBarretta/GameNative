@@ -78,6 +78,12 @@
             android:exported="false"
             android:theme="@style/Theme.Pluvia" />
 
+        <!-- Amazon OAuth (in-app WebView; PKCE flow for Amazon Games auth) -->
+        <activity
+            android:name=".ui.screen.auth.AmazonOAuthActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Pluvia" />
+
         <!-- Launcher icon aliases to allow switching app icon at runtime -->
         <activity-alias
             android:name=".MainActivityAliasDefault"
