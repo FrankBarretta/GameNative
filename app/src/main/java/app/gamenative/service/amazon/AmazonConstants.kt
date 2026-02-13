@@ -40,10 +40,11 @@ object AmazonConstants {
     const val OPENID_RETURN_TO = "https://www.amazon.com"
 
     /**
-     * The scopes requested during OAuth.  Amazon Gaming requires these for
-     * game library access and CDN downloads.
+     * The OAuth scope for device authentication.
+     * This MUST be "device_auth_access" to get an authorization code,
+     * not an OpenID 2.0 response.
      */
-    const val OA2_SCOPE = "profile payments:shipping_address payments:widget"
+    const val OA2_SCOPE = "device_auth_access"
 
     /** Where the redirect lands after user approves login */
     const val OA2_RESPONSE_TYPE = "code"
@@ -65,18 +66,22 @@ object AmazonConstants {
             .authority("www.amazon.com")
             .path("/ap/signin")
             .appendQueryParameter("openid.ns", OPENID_NS)
-            .appendQueryParameter("openid.ns.pape", OPENID_NS_PAPE)
-            .appendQueryParameter("openid.ns.oa2", OPENID_NS_OA2)
-            .appendQueryParameter("openid.oa2.response_type", OA2_RESPONSE_TYPE)
-            .appendQueryParameter("openid.oa2.scope", OA2_SCOPE)
-            .appendQueryParameter("openid.oa2.code_challenge", codeChallenge)
-            .appendQueryParameter("openid.oa2.code_challenge_method", "S256")
-            .appendQueryParameter("openid.oa2.client_id", clientId)
             .appendQueryParameter("openid.claimed_id", OPENID_CLAIMED_ID)
             .appendQueryParameter("openid.identity", OPENID_IDENTITY)
-            .appendQueryParameter("openid.assoc_handle", OPENID_ASSOC_HANDLE)
             .appendQueryParameter("openid.mode", OPENID_MODE)
+            .appendQueryParameter("openid.oa2.scope", OA2_SCOPE)
+            .appendQueryParameter("openid.ns.oa2", OPENID_NS_OA2)
+            .appendQueryParameter("openid.oa2.response_type", OA2_RESPONSE_TYPE)
+            .appendQueryParameter("openid.oa2.code_challenge_method", "S256")
+            .appendQueryParameter("openid.oa2.client_id", "device:$clientId")
+            .appendQueryParameter("language", "en_US")
+            .appendQueryParameter("marketPlaceId", MARKETPLACE_ID)
             .appendQueryParameter("openid.return_to", OPENID_RETURN_TO)
+            .appendQueryParameter("openid.pape.max_auth_age", "0")
+            .appendQueryParameter("openid.ns.pape", OPENID_NS_PAPE)
+            .appendQueryParameter("openid.assoc_handle", OPENID_ASSOC_HANDLE)
+            .appendQueryParameter("pageId", OPENID_ASSOC_HANDLE)
+            .appendQueryParameter("openid.oa2.code_challenge", codeChallenge)
             .build()
             .toString()
     }

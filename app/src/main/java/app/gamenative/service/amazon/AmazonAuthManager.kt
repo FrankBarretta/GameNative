@@ -60,9 +60,14 @@ object AmazonAuthManager {
         pendingDeviceSerial = serial
         pendingClientId = clientId
 
+        val authUrl = AmazonConstants.buildAuthUrl(clientId, challenge)
+        
         Timber.d("[Amazon] Auth flow started (serial=${serial.take(8)}…)")
+        Timber.d("[Amazon] Client ID: device:$clientId")
+        Timber.d("[Amazon] Auth URL scope: device_auth_access")
+        Timber.d("[Amazon] Full auth URL: $authUrl")
 
-        return AmazonConstants.buildAuthUrl(clientId, challenge)
+        return authUrl
     }
 
     // ── Auth flow (step 2): exchange auth-code for tokens ───────────────────
