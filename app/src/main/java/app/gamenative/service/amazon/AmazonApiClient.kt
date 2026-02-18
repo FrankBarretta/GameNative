@@ -22,6 +22,14 @@ object AmazonApiClient {
     private const val ENTITLEMENTS_URL =
         "https://gaming.amazon.com/api/distribution/entitlements"
 
+    /**
+     * Base URL for the public distribution service — used by GetGameDownload, GetLiveVersionIds, etc.
+     * Distinct from ENTITLEMENTS_URL (which is only for GetEntitlements).
+     * Confirmed from nile: constants.AMAZON_GAMING_DISTRIBUTION
+     */
+    private const val DISTRIBUTION_URL =
+        "https://gaming.amazon.com/api/distribution/v2/public"
+
     private const val GET_ENTITLEMENTS_TARGET =
         "com.amazon.animusdistributionservice.entitlement.AnimusEntitlementsService.GetEntitlements"
 
@@ -130,14 +138,14 @@ object AmazonApiClient {
             val responseCode = connection.responseCode
             if (responseCode != HttpURLConnection.HTTP_OK) {
                 val errorBody = connection.errorStream?.bufferedReader()?.readText() ?: "(no body)"
-                Timber.e("[Amazon] GetEntitlements HTTP $responseCode: $errorBody")
+                Timber.e("[Amazon] HTTP $responseCode from $url (target=${target.substringAfterLast('.')}): $errorBody")
                 return null
             }
 
             val responseText = connection.inputStream.bufferedReader().readText()
             JSONObject(responseText)
         } catch (e: Exception) {
-            Timber.e(e, "[Amazon] GetEntitlements request failed")
+            Timber.e(e, "[Amazon] POST to $url failed")
             null
         }
     }
@@ -247,15 +255,18 @@ object AmazonApiClient {
             put("entitlementId", entitlementId)
             put("Operation", "GetGameDownload")
         }
+
+        Timber.tag("Amazon").d("fetchGameDownload: entitlementId=$entitlementId, token=${bearerToken.take(20)}…")
+
         val response = postJson(
-            url = ENTITLEMENTS_URL,
+            url = DISTRIBUTION_URL,
             target = GET_GAME_DOWNLOAD_TARGET,
             bearerToken = bearerToken,
             body = body,
         ) ?: return@withContext null
 
         val downloadUrl = response.optString("downloadUrl", "").ifEmpty {
-            Timber.e("[Amazon] GetGameDownload: missing downloadUrl")
+            Timber.e("[Amazon] GetGameDownload: missing downloadUrl in response: ${response.toString().take(500)}")
             return@withContext null
         }
         val versionId = response.optString("versionId", "")

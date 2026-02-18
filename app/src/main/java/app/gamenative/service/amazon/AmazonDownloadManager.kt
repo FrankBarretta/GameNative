@@ -84,7 +84,8 @@ class AmazonDownloadManager @Inject constructor(
 
             // ── 3. Manifest ──────────────────────────────────────────────────
             downloadInfo.updateStatusMessage("Fetching manifest…")
-            val manifestUrl = "${spec.downloadUrl}/manifest.proto"
+            val manifestUrl = appendPath(spec.downloadUrl, "manifest.proto")
+            Timber.tag(TAG).d("Manifest URL: $manifestUrl")
             val manifestBytes = fetchBytes(manifestUrl)
                 ?: return@withContext Result.failure(Exception("Failed to download manifest.proto"))
 
@@ -218,7 +219,9 @@ class AmazonDownloadManager @Inject constructor(
             destFile.parentFile?.mkdirs()
             tmpFile.parentFile?.mkdirs()
 
-            val url = "$baseUrl/${file.unixPath}"
+            // nile uses /files/{hash_hex} per downloading/manager.py, NOT the unix path
+            val hashHex = file.hashBytes.joinToString("") { "%02x".format(it) }
+            val url = appendPath(baseUrl, "files/$hashHex")
             val request = Request.Builder()
                 .url(url)
                 .header("User-Agent", "nile/0.1 Amazon")
@@ -263,6 +266,21 @@ class AmazonDownloadManager @Inject constructor(
             tmpFile.delete()
             Timber.tag(TAG).w(e, "Error downloading ${file.unixPath}")
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Insert [segment] into the path portion of [baseUrl], before any query string.
+     * e.g. appendPath("https://host/foo?q=1", "bar") → "https://host/foo/bar?q=1"
+     */
+    private fun appendPath(baseUrl: String, segment: String): String {
+        val qIdx = baseUrl.indexOf('?')
+        return if (qIdx == -1) {
+            "$baseUrl/$segment"
+        } else {
+            val path = baseUrl.substring(0, qIdx)
+            val query = baseUrl.substring(qIdx)
+            "$path/$segment$query"
         }
     }
 
