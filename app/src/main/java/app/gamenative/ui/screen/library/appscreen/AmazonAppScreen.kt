@@ -101,7 +101,10 @@ class AmazonAppScreen : BaseAppScreen() {
         libraryItem: LibraryItem,
     ): GameDisplayInfo {
         val productId = productIdOf(libraryItem)
-        Timber.tag(TAG).d("getGameDisplayInfo: productId=$productId name=${libraryItem.name}")
+        Timber.tag(TAG).d(
+            "getGameDisplayInfo: productId=$productId name=${libraryItem.name} " +
+                "gameId=${productId.hashCode()} libraryItem.gameId=${libraryItem.gameId}"
+        )
 
         var game by remember(productId) { mutableStateOf<AmazonGame?>(null) }
 
@@ -141,7 +144,7 @@ class AmazonAppScreen : BaseAppScreen() {
             name = g?.title ?: libraryItem.name,
             iconUrl = iconUrl,
             heroImageUrl = heroImageUrl,
-            gameId = 0, // Amazon IDs are strings; not represented as Int
+            gameId = productId.hashCode(), // Stable Int from Amazon UUID — matches AmazonService event IDs
             appId = libraryItem.appId,
             releaseDate = releaseDateTs,
             developer = developer,
