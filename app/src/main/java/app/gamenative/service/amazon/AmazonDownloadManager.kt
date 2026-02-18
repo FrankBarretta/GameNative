@@ -249,7 +249,14 @@ class AmazonDownloadManager @Inject constructor(
             // Verify SHA-256 hash (algorithm 0) when present
             if (file.hashAlgorithm == 0 && file.hashBytes.isNotEmpty()) {
                 val digest = MessageDigest.getInstance("SHA-256")
-                val computed = digest.digest(tmpFile.readBytes())
+                tmpFile.inputStream().buffered().use { input ->
+                    val buf = ByteArray(8192)
+                    var read: Int
+                    while (input.read(buf).also { read = it } != -1) {
+                        digest.update(buf, 0, read)
+                    }
+                }
+                val computed = digest.digest()
                 if (!computed.contentEquals(file.hashBytes)) {
                     tmpFile.delete()
                     return@withContext Result.failure(
