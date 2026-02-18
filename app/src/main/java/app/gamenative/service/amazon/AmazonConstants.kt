@@ -32,7 +32,7 @@ object AmazonConstants {
     // ── OpenID Connect / OAuth parameters ───────────────────────────────────
     const val OPENID_NS = "http://specs.openid.net/auth/2.0"
     const val OPENID_NS_PAPE = "http://specs.openid.net/extensions/pape/1.0"
-    const val OPENID_NS_OA2 = "http://www.amazon.com/ap/OA2"
+    const val OPENID_NS_OA2 = "http://www.amazon.com/ap/ext/oauth/2"
     const val OPENID_ASSOC_HANDLE = "amzn_sonic_games_launcher"
     const val OPENID_CLAIMED_ID = "http://specs.openid.net/auth/2.0/identifier_select"
     const val OPENID_IDENTITY = "http://specs.openid.net/auth/2.0/identifier_select"
