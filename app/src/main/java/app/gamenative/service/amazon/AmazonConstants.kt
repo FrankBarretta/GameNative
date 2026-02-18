@@ -1,6 +1,8 @@
 package app.gamenative.service.amazon
 
+import android.content.Context
 import android.net.Uri
+import java.io.File
 
 /**
  * Constants for Amazon Games integration.
@@ -51,6 +53,16 @@ object AmazonConstants {
 
     // ── User-Agent ──────────────────────────────────────────────────────────
     const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+
+    /**
+     * Returns the default installation directory for an Amazon game.
+     * Sanitises [gameTitle] to be filesystem-safe.
+     */
+    fun getGameInstallPath(context: Context, gameTitle: String): String {
+        val sanitized = gameTitle.replace(Regex("[^a-zA-Z0-9 \\-_]"), "").trim()
+        val base = File(context.getExternalFilesDir(null), "AmazonGames")
+        return File(base, sanitized).absolutePath
+    }
 
     /**
      * Builds the full Amazon OAuth login URL for a given PKCE code-challenge

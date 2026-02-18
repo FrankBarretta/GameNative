@@ -25,8 +25,17 @@ object AmazonApiClient {
     private const val GET_ENTITLEMENTS_TARGET =
         "com.amazon.animusdistributionservice.entitlement.AnimusEntitlementsService.GetEntitlements"
 
+    private const val GET_GAME_DOWNLOAD_TARGET =
+        "com.amazon.animusdistributionservice.external.AnimusDistributionService.GetGameDownload"
+
     private const val USER_AGENT = "com.amazon.agslauncher.win/3.0.9202.1"
     private const val KEY_ID = "d5dc8b8b-86c8-4fc4-ae93-18c0def5314d"
+
+    /** Result of a GetGameDownload call. */
+    data class GameDownloadSpec(
+        val downloadUrl: String,
+        val versionId: String,
+    )
 
     // ── Public API ───────────────────────────────────────────────────────────
 
@@ -143,6 +152,9 @@ object AmazonApiClient {
         val title = product.optString("title", "")
         val purchasedDate = entitlement.optString("purchasedDate", "")
 
+        // Top-level entitlement UUID  — needed for GetGameDownload, NOT the product ID
+        val entitlementId = entitlement.optString("id", "")
+
         // productDetail sits between product and details:
         // product -> productDetail -> details
         //                         -> iconUrl  (box art lives here, NOT inside details)
@@ -159,6 +171,7 @@ object AmazonApiClient {
 
         return AmazonGame(
             id = id,
+            entitlementId = entitlementId,
             title = title,
             artUrl = artUrl,
             heroUrl = heroUrl,
@@ -212,5 +225,41 @@ object AmazonApiClient {
         val digest = MessageDigest.getInstance("SHA-256")
         val hashBytes = digest.digest(input.toByteArray(Charsets.UTF_8))
         return hashBytes.joinToString("") { "%02x".format(it) }.uppercase()
+    }
+
+    // ── Download API ─────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Fetches the download manifest spec for a game.
+     *
+     * Mirrors nile's `Library.get_game_manifest(id)` where `id` is the top-level
+     * entitlement UUID (NOT the product ID).
+     *
+     * @param entitlementId  The UUID from [AmazonGame.entitlementId].
+     * @param bearerToken    The `access_token` from [AmazonAuthManager].
+     * @return [GameDownloadSpec] on success, null on failure.
+     */
+    suspend fun fetchGameDownload(
+        entitlementId: String,
+        bearerToken: String,
+    ): GameDownloadSpec? = withContext(Dispatchers.IO) {
+        val body = JSONObject().apply {
+            put("entitlementId", entitlementId)
+            put("Operation", "GetGameDownload")
+        }
+        val response = postJson(
+            url = ENTITLEMENTS_URL,
+            target = GET_GAME_DOWNLOAD_TARGET,
+            bearerToken = bearerToken,
+            body = body,
+        ) ?: return@withContext null
+
+        val downloadUrl = response.optString("downloadUrl", "").ifEmpty {
+            Timber.e("[Amazon] GetGameDownload: missing downloadUrl")
+            return@withContext null
+        }
+        val versionId = response.optString("versionId", "")
+        Timber.i("[Amazon] GetGameDownload: versionId=$versionId url=$downloadUrl")
+        GameDownloadSpec(downloadUrl = downloadUrl, versionId = versionId)
     }
 }

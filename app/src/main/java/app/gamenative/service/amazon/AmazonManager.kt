@@ -59,4 +59,22 @@ class AmazonManager @Inject constructor(
     suspend fun getGameById(productId: String): AmazonGame? = withContext(Dispatchers.IO) {
         amazonGameDao.getById(productId)
     }
+
+    /** Mark a game as installed and persist its install path and size. */
+    suspend fun markInstalled(productId: String, installPath: String, installSize: Long) =
+        withContext(Dispatchers.IO) {
+            amazonGameDao.markAsInstalled(productId, installPath, installSize)
+            Timber.i("[Amazon] Marked installed: $productId at $installPath (${installSize}B)")
+        }
+
+    /** Mark a game as not installed (clears install path and size). */
+    suspend fun markUninstalled(productId: String) = withContext(Dispatchers.IO) {
+        amazonGameDao.markAsUninstalled(productId)
+        Timber.i("[Amazon] Marked uninstalled: $productId")
+    }
+
+    /** Get the stored bearer token (needed by AmazonDownloadManager). */
+    suspend fun getBearerToken(): String? = withContext(Dispatchers.IO) {
+        AmazonAuthManager.getStoredCredentials(context).getOrNull()?.accessToken
+    }
 }

@@ -52,6 +52,14 @@ interface AmazonGameDao {
     @Query("DELETE FROM amazon_games")
     suspend fun deleteAll()
 
+    @Query(
+        "UPDATE amazon_games SET is_installed = 1, install_path = :path, install_size = :size WHERE id = :id",
+    )
+    suspend fun markAsInstalled(id: String, path: String, size: Long)
+
+    @Query("UPDATE amazon_games SET is_installed = 0, install_path = '', install_size = 0 WHERE id = :id")
+    suspend fun markAsUninstalled(id: String)
+
     /**
      * Upsert Amazon games while preserving install status and install path.
      * Used when refreshing the library from the Amazon API — we don't want to

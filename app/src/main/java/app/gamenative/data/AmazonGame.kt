@@ -15,6 +15,14 @@ data class AmazonGame(
     @ColumnInfo("id")
     val id: String,
 
+    /**
+     * Top-level entitlement UUID from the GetEntitlements response
+     * (e.g. "08c0fa3b-3448-19b7-242c-4191201d0515").
+     * Required by the GetGameDownload API — different from the product ID.
+     */
+    @ColumnInfo(name = "entitlement_id", defaultValue = "")
+    val entitlementId: String = "",
+
     @ColumnInfo("title")
     val title: String = "",
 
@@ -52,6 +60,10 @@ data class AmazonGame(
     /** Download size in bytes extracted from productDetail.details */
     @ColumnInfo(name = "download_size", defaultValue = "0")
     val downloadSize: Long = 0,
+
+    /** On-disk installed size in bytes, derived from the download manifest. */
+    @ColumnInfo(name = "install_size", defaultValue = "0")
+    val installSize: Long = 0,
 
     /** Raw product JSON kept for manifest lookup, etc. */
     @ColumnInfo("product_json")

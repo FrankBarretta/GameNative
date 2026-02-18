@@ -13,12 +13,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import app.gamenative.data.AmazonGame
 import app.gamenative.data.LibraryItem
+import app.gamenative.service.amazon.AmazonConstants
 import app.gamenative.service.amazon.AmazonService
 import app.gamenative.ui.data.AppMenuOption
 import app.gamenative.ui.data.GameDisplayInfo
 import app.gamenative.ui.enums.AppOptionMenuType
 import app.gamenative.utils.ContainerUtils
 import com.winlator.container.ContainerData
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.time.LocalDate
 import java.time.ZonedDateTime
@@ -146,7 +150,7 @@ class AmazonAppScreen : BaseAppScreen() {
             } else {
                 null
             },
-            sizeOnDisk = null, // not tracked until install support is added
+            sizeOnDisk = if ((g?.installSize ?: 0L) > 0L) formatBytes(g!!.installSize) else null,
             sizeFromStore = sizeFromStore,
         )
     }
@@ -154,12 +158,15 @@ class AmazonAppScreen : BaseAppScreen() {
 override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
         AmazonService.isGameInstalled(productIdOf(libraryItem))
 
-    /** Amazon downloads are not yet implemented; always returns false. */
-    override fun isValidToDownload(context: Context, libraryItem: LibraryItem): Boolean = false
+    override fun isValidToDownload(context: Context, libraryItem: LibraryItem): Boolean =
+        !isInstalled(context, libraryItem) &&
+            AmazonService.getDownloadInfo(productIdOf(libraryItem)) == null
 
-    override fun isDownloading(context: Context, libraryItem: LibraryItem): Boolean = false
+    override fun isDownloading(context: Context, libraryItem: LibraryItem): Boolean =
+        AmazonService.getDownloadInfo(productIdOf(libraryItem)) != null
 
-    override fun getDownloadProgress(context: Context, libraryItem: LibraryItem): Float = 0f
+    override fun getDownloadProgress(context: Context, libraryItem: LibraryItem): Float =
+        AmazonService.getDownloadInfo(productIdOf(libraryItem))?.getProgress() ?: 0f
 
     override fun hasPartialDownload(context: Context, libraryItem: LibraryItem): Boolean = false
 
@@ -168,17 +175,40 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
         libraryItem: LibraryItem,
         onClickPlay: (Boolean) -> Unit,
     ) {
-        // No-op until Amazon download support is implemented
-        Toast.makeText(context, "Amazon game downloads coming soon", Toast.LENGTH_SHORT).show()
-        Timber.tag(TAG).i("Download/install not yet available for: ${libraryItem.appId}")
+        val productId = productIdOf(libraryItem)
+        val game = AmazonService.getAmazonGameOf(productId) ?: run {
+            Toast.makeText(context, "Game not found — try syncing library", Toast.LENGTH_SHORT).show()
+            Timber.tag(TAG).w("onDownloadInstallClick: game not found for $productId")
+            return
+        }
+        val installPath = AmazonConstants.getGameInstallPath(context, game.title)
+        Timber.tag(TAG).i("Downloading '${game.title}' → $installPath")
+
+        val result = AmazonService.downloadGame(context, productId, installPath)
+        if (result.isFailure) {
+            val msg = result.exceptionOrNull()?.message ?: "Unknown error"
+            Toast.makeText(context, "Failed to start download: $msg", Toast.LENGTH_LONG).show()
+            Timber.tag(TAG).e("downloadGame failed: $msg")
+        }
     }
 
     override fun onPauseResumeClick(context: Context, libraryItem: LibraryItem) {
-        // Not applicable — no downloads yet
+        val productId = productIdOf(libraryItem)
+        if (AmazonService.getDownloadInfo(productId) != null) {
+            Timber.tag(TAG).i("Cancelling download for $productId")
+            AmazonService.cancelDownload(productId)
+        } else {
+            // Resume — re-start the download
+            onDownloadInstallClick(context, libraryItem) {}
+        }
     }
 
     override fun onDeleteDownloadClick(context: Context, libraryItem: LibraryItem) {
-        // Not applicable — no downloads yet
+        val productId = productIdOf(libraryItem)
+        Timber.tag(TAG).i("Deleting game $productId")
+        CoroutineScope(Dispatchers.IO).launch {
+            AmazonService.deleteGame(context, productId)
+        }
     }
 
     override fun onUpdateClick(context: Context, libraryItem: LibraryItem) {
@@ -186,12 +216,7 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
     }
 
     override fun getInstallPath(context: Context, libraryItem: LibraryItem): String? {
-        val game = AmazonService.getAmazonGameOf(productIdOf(libraryItem))
-        return if (game?.isInstalled == true && game.installPath.isNotEmpty()) {
-            game.installPath
-        } else {
-            null
-        }
+        return AmazonService.getInstallPath(productIdOf(libraryItem))
     }
 
     override fun getExportFileExtension(): String = ".amazon"
