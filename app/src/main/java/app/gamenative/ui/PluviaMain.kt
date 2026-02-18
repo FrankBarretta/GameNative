@@ -1240,6 +1240,15 @@ fun preLaunchApp(
             return@launch
         }
 
+        // For Amazon Games, skip cloud sync entirely (Amazon doesn't support cloud saves)
+        val isAmazonGame = ContainerUtils.extractGameSourceFromContainerId(appId) == GameSource.AMAZON
+        if (isAmazonGame) {
+            Timber.tag("preLaunchApp").i("Amazon Game detected for $appId — skipping cloud sync and launching container")
+            setLoadingDialogVisible(false)
+            onSuccess(context, appId)
+            return@launch
+        }
+
         // For Epic Games, sync cloud saves before launch
         val isEpicGame = ContainerUtils.extractGameSourceFromContainerId(appId) == GameSource.EPIC
         if (isEpicGame) {

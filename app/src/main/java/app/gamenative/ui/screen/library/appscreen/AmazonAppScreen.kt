@@ -179,6 +179,22 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
         onClickPlay: (Boolean) -> Unit,
     ) {
         val productId = productIdOf(libraryItem)
+        val installed = isInstalled(context, libraryItem)
+        val downloading = isDownloading(context, libraryItem)
+
+        Timber.tag(TAG).d("onDownloadInstallClick: productId=$productId, installed=$installed, downloading=$downloading")
+
+        if (downloading) {
+            Timber.tag(TAG).i("Download already in progress for $productId — ignoring click")
+            return
+        }
+
+        if (installed) {
+            Timber.tag(TAG).i("Game already installed, launching: $productId")
+            onClickPlay(false)
+            return
+        }
+
         val game = AmazonService.getAmazonGameOf(productId) ?: run {
             Toast.makeText(context, "Game not found — try syncing library", Toast.LENGTH_SHORT).show()
             Timber.tag(TAG).w("onDownloadInstallClick: game not found for $productId")

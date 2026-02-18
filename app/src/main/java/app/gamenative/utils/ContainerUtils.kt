@@ -1031,7 +1031,15 @@ object ContainerUtils {
         return try {
             lastPart.toInt()
         } catch (e: NumberFormatException) {
-            throw IllegalArgumentException("Could not extract game ID from container ID: $containerId", e)
+            // Amazon IDs are UUID strings (e.g. "amzn1.adg.product.xxx") — not parseable as Int.
+            // Use hashCode() of the full ID part (after prefix) for a stable Int representation.
+            if (containerId.startsWith("AMAZON_")) {
+                val idPart = idWithoutSuffix.removePrefix("AMAZON_")
+                Timber.d("extractGameIdFromContainerId: Amazon ID '$idPart' → hashCode=${idPart.hashCode()}")
+                idPart.hashCode()
+            } else {
+                throw IllegalArgumentException("Could not extract game ID from container ID: $containerId", e)
+            }
         }
     }
 

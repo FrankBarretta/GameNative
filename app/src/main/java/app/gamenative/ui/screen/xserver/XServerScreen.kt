@@ -2127,11 +2127,12 @@ private fun getWineStartCommand(
 
         return launchCommand
     } else if (gameSource == GameSource.AMAZON) {
-        // For Amazon games, get install path from nile
-        Timber.tag("XServerScreen").i("Launching Amazon game: $gameId")
+        // For Amazon games, get install path using the product ID string (not the Int gameId)
+        val productId = appId.removePrefix("AMAZON_").substringBefore("(")
+        Timber.tag("XServerScreen").i("Launching Amazon game: productId=$productId")
         
         val amazonService = app.gamenative.service.amazon.AmazonService.getInstance()
-        val installPath = amazonService?.getInstalledGamePath(gameId.toString())
+        val installPath = amazonService?.getInstalledGamePath(productId)
         
         if (installPath.isNullOrEmpty()) {
             Timber.tag("XServerScreen").e("Cannot launch: Amazon game not installed")
