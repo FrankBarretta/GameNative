@@ -25,15 +25,35 @@ data class AmazonGame(
     @ColumnInfo("install_path")
     val installPath: String = "",
 
-    // Art – full HTTPS URL to the product image (may be empty if not provided by API)
+    // Art – full HTTPS URL to the product icon/box image (may be empty if not provided by API)
     @ColumnInfo("art_url")
     val artUrl: String = "",
+
+    // Hero/background image URL for the detail screen (wide, landscape)
+    @ColumnInfo(name = "hero_url", defaultValue = "")
+    val heroUrl: String = "",
 
     /** ISO-8601 date string from the entitlement, e.g. "2024-01-15T00:00:00.000Z" */
     @ColumnInfo("purchased_date")
     val purchasedDate: String = "",
 
-    /** Raw product JSON kept for future use (install, manifest lookup, etc.) */
+    /** Game developer name extracted from productDetail.details */
+    @ColumnInfo(name = "developer", defaultValue = "")
+    val developer: String = "",
+
+    /** Game publisher name extracted from productDetail.details */
+    @ColumnInfo(name = "publisher", defaultValue = "")
+    val publisher: String = "",
+
+    /** Release date string extracted from productDetail.details (ISO-8601 or "YYYY-MM-DD") */
+    @ColumnInfo(name = "release_date", defaultValue = "")
+    val releaseDate: String = "",
+
+    /** Download size in bytes extracted from productDetail.details */
+    @ColumnInfo(name = "download_size", defaultValue = "0")
+    val downloadSize: Long = 0,
+
+    /** Raw product JSON kept for manifest lookup, etc. */
     @ColumnInfo("product_json")
     val productJson: String = "",
 )

@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.IBinder
 import app.gamenative.data.AmazonCredentials
+import app.gamenative.data.AmazonGame
 import app.gamenative.service.NotificationHelper
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
@@ -71,10 +72,23 @@ class AmazonService : Service() {
         fun getInstance(): AmazonService? = instance
 
         /**
-         * Returns true if the Amazon game with [gameId] is marked as installed in the DB.
-         * Real install tracking is a future feature — always returns false for now.
+         * Returns true if the Amazon game with [productId] is marked as installed in the DB.
+         * Delegates to the running service's AmazonManager; returns false if the service is not up.
          */
-        fun isGameInstalled(gameId: String): Boolean = false
+        fun isGameInstalled(productId: String): Boolean {
+            return runBlocking(Dispatchers.IO) {
+                instance?.amazonManager?.getGameById(productId)?.isInstalled == true
+            }
+        }
+
+        /**
+         * Returns the [AmazonGame] for the given product ID, or null if not found / service not running.
+         */
+        fun getAmazonGameOf(productId: String): AmazonGame? {
+            return runBlocking(Dispatchers.IO) {
+                instance?.amazonManager?.getGameById(productId)
+            }
+        }
 
         /**
          * Returns the on-disk install path for [gameId], or null if not installed.
@@ -110,6 +124,9 @@ class AmazonService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /** Instance-method accessor so callers using [getInstance]?. can call this directly. */
+    fun getInstalledGamePath(gameId: String): String? = null
+
     private suspend fun syncLibrary() {
         try {
             amazonManager.refreshLibrary()
@@ -117,10 +134,4 @@ class AmazonService : Service() {
             Timber.e(e, "[Amazon] Library sync failed")
         }
     }
-
-    /**
-     * Returns the on-disk install path for [gameId], or null if not installed.
-     * Real install tracking is a future feature.
-     */
-    fun getInstalledGamePath(gameId: String): String? = null
 }

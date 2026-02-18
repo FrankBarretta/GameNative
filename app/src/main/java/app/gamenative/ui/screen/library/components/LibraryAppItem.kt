@@ -67,6 +67,7 @@ import app.gamenative.data.GameSource
 import app.gamenative.data.LibraryItem
 import app.gamenative.service.DownloadService
 import app.gamenative.service.SteamService
+import app.gamenative.service.amazon.AmazonService
 import app.gamenative.service.epic.EpicService
 import app.gamenative.service.gog.GOGService
 import app.gamenative.ui.enums.PaneType
@@ -351,7 +352,7 @@ internal fun AppItem(
                                 GameSource.GOG -> GOGService.isGameInstalled(appInfo.gameId.toString())
                                 GameSource.EPIC -> EpicService.isGameInstalled(appInfo.gameId)
                                 GameSource.CUSTOM_GAME -> true
-                                else -> false
+                                GameSource.AMAZON -> AmazonService.isGameInstalled(appInfo.appId.removePrefix("AMAZON_"))
                             }
                         }
 
@@ -364,7 +365,7 @@ internal fun AppItem(
                                     GameSource.GOG -> GOGService.isGameInstalled(appInfo.gameId.toString())
                                     GameSource.EPIC -> EpicService.isGameInstalled(appInfo.gameId)
                                     GameSource.CUSTOM_GAME -> true
-                                    else -> false
+                                    GameSource.AMAZON -> AmazonService.isGameInstalled(appInfo.appId.removePrefix("AMAZON_"))
                                 }
                             }
                         }

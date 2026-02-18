@@ -1,6 +1,7 @@
 package app.gamenative.service.amazon
 
 import android.content.Context
+import app.gamenative.data.AmazonGame
 import app.gamenative.db.dao.AmazonGameDao
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -49,5 +50,13 @@ class AmazonManager @Inject constructor(
 
         amazonGameDao.upsertPreservingInstallStatus(games)
         Timber.i("[Amazon] Library refresh complete — ${games.size} game(s) in DB")
+    }
+
+    /**
+     * Look up a single [AmazonGame] by its product ID (e.g. "amzn1.adg.product.XXXX").
+     * Returns null if not found.
+     */
+    suspend fun getGameById(productId: String): AmazonGame? = withContext(Dispatchers.IO) {
+        amazonGameDao.getById(productId)
     }
 }

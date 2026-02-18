@@ -135,7 +135,7 @@ object AmazonApiClient {
 
     /**
      * Parse a single entitlement JSON object into an [AmazonGame].
-     * Entitlement shape (from nile): { product: { id, title, ... }, ... }
+     * Entitlement shape (from nile): { product: { id, title, productDetail: { details: {...} }, ... }, ... }
      */
     private fun parseEntitlement(entitlement: JSONObject): AmazonGame? {
         val product = entitlement.optJSONObject("product") ?: return null
@@ -143,18 +143,68 @@ object AmazonApiClient {
         val title = product.optString("title", "")
         val purchasedDate = entitlement.optString("purchasedDate", "")
 
-        // Art URL — Amazon sometimes provides it under different keys; try a few
-        val artUrl = product.optString("iconUrl", "")
-            .ifEmpty { product.optString("artUrl", "") }
-            .ifEmpty { product.optString("imageUrl", "") }
+        // productDetail sits between product and details:
+        // product -> productDetail -> details
+        //                         -> iconUrl  (box art lives here, NOT inside details)
+        val productDetail = product.optJSONObject("productDetail")
+        val details = productDetail?.optJSONObject("details")
+
+        val developer = details?.optString("developer", "") ?: ""
+        val publisher = details?.optString("publisher", "") ?: ""
+        val releaseDate = details?.optString("releaseDate", "") ?: ""
+        val downloadSize = details?.optLong("fileSize", 0L) ?: 0L
+
+        val artUrl = resolveArtUrl(productDetail, details)
+        val heroUrl = resolveHeroUrl(details)
 
         return AmazonGame(
             id = id,
             title = title,
             artUrl = artUrl,
+            heroUrl = heroUrl,
             purchasedDate = purchasedDate,
+            developer = developer,
+            publisher = publisher,
+            releaseDate = releaseDate,
+            downloadSize = downloadSize,
             productJson = product.toString(),
         )
+    }
+
+    /**
+     * Resolve the primary (icon/box) artwork URL.
+     *
+     * Live API structure (confirmed from device logs):
+     *   product -> productDetail -> iconUrl          (box art)
+     *   product -> productDetail -> details -> logoUrl  (transparent logo PNG, fallback)
+     */
+    private fun resolveArtUrl(productDetail: JSONObject?, details: JSONObject?): String {
+        // Primary: iconUrl lives directly on productDetail, NOT inside details
+        val iconUrl = productDetail?.optString("iconUrl", "") ?: ""
+        if (iconUrl.isNotEmpty()) return iconUrl
+
+        // Fallback: transparent logo PNG inside details
+        val logoUrl = details?.optString("logoUrl", "") ?: ""
+        if (logoUrl.isNotEmpty()) return logoUrl
+
+        return ""
+    }
+
+    /**
+     * Resolve the hero/background artwork URL for the detail screen.
+     *
+     * Live API structure (confirmed from device logs):
+     *   product -> productDetail -> details -> backgroundUrl1  (primary background)
+     *   product -> productDetail -> details -> backgroundUrl2  (secondary background)
+     */
+    private fun resolveHeroUrl(details: JSONObject?): String {
+        val bg1 = details?.optString("backgroundUrl1", "") ?: ""
+        if (bg1.isNotEmpty()) return bg1
+
+        val bg2 = details?.optString("backgroundUrl2", "") ?: ""
+        if (bg2.isNotEmpty()) return bg2
+
+        return ""
     }
 
     /** SHA-256 of [input], hex-encoded in UPPERCASE — matches nile's hardwareHash. */
