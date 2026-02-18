@@ -238,6 +238,85 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
         return AmazonService.getInstallPath(productIdOf(libraryItem))
     }
 
+    override fun observeGameState(
+        context: Context,
+        libraryItem: LibraryItem,
+        onStateChanged: () -> Unit,
+        onProgressChanged: (Float) -> Unit,
+        onHasPartialDownloadChanged: ((Boolean) -> Unit)?,
+    ): (() -> Unit)? {
+        val gameId = libraryItem.gameId
+        val productId = productIdOf(libraryItem)
+        Timber.tag(TAG).d("[OBSERVE] Setting up observeGameState for productId=$productId, gameId=$gameId")
+
+        val disposables = mutableListOf<() -> Unit>()
+        var currentProgressListener: ((Float) -> Unit)? = null
+
+        // If download is already in progress, attach listener immediately
+        val existingDownloadInfo = AmazonService.getDownloadInfo(productId)
+        if (existingDownloadInfo != null && (existingDownloadInfo.getProgress() ?: 0f) < 1f) {
+            Timber.tag(TAG).d("[OBSERVE] Download already in progress for $productId, attaching progress listener")
+            val progressListener: (Float) -> Unit = { progress ->
+                onProgressChanged(progress)
+            }
+            existingDownloadInfo.addProgressListener(progressListener)
+            currentProgressListener = progressListener
+            disposables += {
+                currentProgressListener?.let { listener ->
+                    existingDownloadInfo.removeProgressListener(listener)
+                    currentProgressListener = null
+                }
+            }
+            existingDownloadInfo.getProgress()?.let { onProgressChanged(it) }
+        }
+
+        // Listen for download status changes (events use productId.hashCode() as appId)
+        val downloadStatusListener: (app.gamenative.events.AndroidEvent.DownloadStatusChanged) -> Unit = { event ->
+            if (event.appId == gameId) {
+                Timber.tag(TAG).d("[OBSERVE] DownloadStatusChanged for $productId, isDownloading=${event.isDownloading}")
+                if (event.isDownloading) {
+                    val downloadInfo = AmazonService.getDownloadInfo(productId)
+                    if (downloadInfo != null) {
+                        currentProgressListener?.let { downloadInfo.removeProgressListener(it) }
+                        val progressListener: (Float) -> Unit = { progress ->
+                            Timber.tag(TAG).v("[OBSERVE] Progress for $productId: $progress")
+                            onProgressChanged(progress)
+                        }
+                        downloadInfo.addProgressListener(progressListener)
+                        currentProgressListener = progressListener
+                        disposables += {
+                            currentProgressListener?.let { listener ->
+                                downloadInfo.removeProgressListener(listener)
+                                currentProgressListener = null
+                            }
+                        }
+                    }
+                } else {
+                    currentProgressListener?.let { listener ->
+                        AmazonService.getDownloadInfo(productId)?.removeProgressListener(listener)
+                        currentProgressListener = null
+                    }
+                    onHasPartialDownloadChanged?.invoke(false)
+                }
+                onStateChanged()
+            }
+        }
+        app.gamenative.PluviaApp.events.on<app.gamenative.events.AndroidEvent.DownloadStatusChanged, Unit>(downloadStatusListener)
+        disposables += { app.gamenative.PluviaApp.events.off<app.gamenative.events.AndroidEvent.DownloadStatusChanged, Unit>(downloadStatusListener) }
+
+        // Listen for install status changes
+        val installListener: (app.gamenative.events.AndroidEvent.LibraryInstallStatusChanged) -> Unit = { event ->
+            if (event.appId == gameId) {
+                Timber.tag(TAG).d("[OBSERVE] Install status changed for $productId")
+                onStateChanged()
+            }
+        }
+        app.gamenative.PluviaApp.events.on<app.gamenative.events.AndroidEvent.LibraryInstallStatusChanged, Unit>(installListener)
+        disposables += { app.gamenative.PluviaApp.events.off<app.gamenative.events.AndroidEvent.LibraryInstallStatusChanged, Unit>(installListener) }
+
+        return { disposables.forEach { it() } }
+    }
+
     override fun getExportFileExtension(): String = ".amazon"
 
     @Composable
