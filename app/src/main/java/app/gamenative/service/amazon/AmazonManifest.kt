@@ -1,6 +1,7 @@
 package app.gamenative.service.amazon
 
 import org.tukaani.xz.LZMAInputStream
+import org.tukaani.xz.XZInputStream
 import timber.log.Timber
 import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
@@ -284,7 +285,15 @@ object AmazonManifest {
     // ── LZMA decompression ────────────────────────────────────────────────────
 
     private fun decompressLzma(bytes: ByteArray): ByteArray {
-        Timber.d("[Amazon] Decompressing LZMA manifest (${bytes.size} bytes compressed)")
-        return LZMAInputStream(ByteArrayInputStream(bytes)).use { it.readBytes() }
+        Timber.d("[Amazon] Decompressing manifest (${bytes.size} bytes compressed)")
+        // Python's lzma.decompress() uses the XZ container format by default.
+        // Try XZ first; fall back to raw legacy LZMA if the XZ magic bytes are absent.
+        return if (bytes.size >= 6 && bytes[0] == 0xFD.toByte() && bytes[1] == '7'.code.toByte()) {
+            Timber.d("[Amazon] Using XZ decompression")
+            XZInputStream(ByteArrayInputStream(bytes)).use { it.readBytes() }
+        } else {
+            Timber.d("[Amazon] Using raw LZMA decompression")
+            LZMAInputStream(ByteArrayInputStream(bytes)).use { it.readBytes() }
+        }
     }
 }
