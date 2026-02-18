@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
 
@@ -67,8 +68,8 @@ object AmazonAuthClient {
                     put("domain", "Device")
                     put("os_version", "10.0.19044.0")
                 })
-                put("requested_extensions", listOf("customer_info", "device_info"))
-                put("requested_token_type", listOf("bearer", "mac_dms"))
+                put("requested_extensions", JSONArray().apply { put("customer_info"); put("device_info") })
+                put("requested_token_type", JSONArray().apply { put("bearer"); put("mac_dms") })
                 put("user_context_map", JSONObject())
             }
 
