@@ -9,8 +9,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import app.gamenative.R
 import app.gamenative.data.AmazonGame
 import app.gamenative.data.LibraryItem
 import app.gamenative.service.amazon.AmazonConstants
@@ -38,6 +43,24 @@ class AmazonAppScreen : BaseAppScreen() {
 
     companion object {
         private const val TAG = "AmazonAppScreen"
+
+        // Shared state for uninstall dialog — list of appIds that should show the dialog
+        private val uninstallDialogAppIds = mutableStateListOf<String>()
+
+        fun showUninstallDialog(appId: String) {
+            Timber.tag(TAG).d("showUninstallDialog: appId=$appId")
+            if (!uninstallDialogAppIds.contains(appId)) {
+                uninstallDialogAppIds.add(appId)
+            }
+        }
+
+        fun hideUninstallDialog(appId: String) {
+            Timber.tag(TAG).d("hideUninstallDialog: appId=$appId")
+            uninstallDialogAppIds.remove(appId)
+        }
+
+        fun shouldShowUninstallDialog(appId: String): Boolean =
+            uninstallDialogAppIds.contains(appId)
 
         /** Extract the raw Amazon product ID from a library item's appId. */
         fun productIdOf(libraryItem: LibraryItem): String =
@@ -224,9 +247,30 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
 
     override fun onDeleteDownloadClick(context: Context, libraryItem: LibraryItem) {
         val productId = productIdOf(libraryItem)
-        Timber.tag(TAG).i("Deleting game $productId")
+        Timber.tag(TAG).i("onDeleteDownloadClick: productId=$productId")
+
+        if (isDownloading(context, libraryItem)) {
+            // Cancel active download
+            Timber.tag(TAG).i("Cancelling active download for $productId")
+            AmazonService.cancelDownload(productId)
+            Toast.makeText(context, "Download cancelled", Toast.LENGTH_SHORT).show()
+        } else if (isInstalled(context, libraryItem)) {
+            // Show uninstall confirmation dialog (debounces multi-tap)
+            Timber.tag(TAG).i("Showing uninstall dialog for: ${libraryItem.appId}")
+            showUninstallDialog(libraryItem.appId)
+        }
+    }
+
+    private fun performUninstall(context: Context, libraryItem: LibraryItem) {
+        val productId = productIdOf(libraryItem)
+        Timber.tag(TAG).i("performUninstall: deleting game $productId")
         CoroutineScope(Dispatchers.IO).launch {
-            AmazonService.deleteGame(context, productId)
+            val result = AmazonService.deleteGame(context, productId)
+            if (result.isSuccess) {
+                Timber.tag(TAG).i("Uninstall succeeded for $productId")
+            } else {
+                Timber.tag(TAG).e("Uninstall failed for $productId: ${result.exceptionOrNull()?.message}")
+            }
         }
     }
 
@@ -340,6 +384,61 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
             optionType = AppOptionMenuType.ResetToDefaults,
             onClick = { showDialog = true },
         )
+    }
+
+    @Composable
+    override fun AdditionalDialogs(
+        libraryItem: LibraryItem,
+        onDismiss: () -> Unit,
+        onEditContainer: () -> Unit,
+        onBack: () -> Unit,
+    ) {
+        val context = LocalContext.current
+
+        // Monitor uninstall dialog state
+        var showUninstallDialog by remember { mutableStateOf(shouldShowUninstallDialog(libraryItem.appId)) }
+        LaunchedEffect(libraryItem.appId) {
+            snapshotFlow { shouldShowUninstallDialog(libraryItem.appId) }
+                .collect { shouldShow ->
+                    showUninstallDialog = shouldShow
+                }
+        }
+
+        if (showUninstallDialog) {
+            AlertDialog(
+                onDismissRequest = {
+                    hideUninstallDialog(libraryItem.appId)
+                },
+                title = { Text(stringResource(R.string.amazon_uninstall_game_title)) },
+                text = {
+                    Text(
+                        text = stringResource(
+                            R.string.amazon_uninstall_confirmation_message,
+                            libraryItem.name,
+                        ),
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            hideUninstallDialog(libraryItem.appId)
+                            performUninstall(context, libraryItem)
+                        },
+                    ) {
+                        Text(stringResource(R.string.uninstall))
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            hideUninstallDialog(libraryItem.appId)
+                        },
+                    ) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                },
+            )
+        }
     }
 
     override fun loadContainerData(context: Context, libraryItem: LibraryItem): ContainerData {
