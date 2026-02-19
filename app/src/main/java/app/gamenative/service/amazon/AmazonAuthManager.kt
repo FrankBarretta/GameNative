@@ -24,10 +24,12 @@ object AmazonAuthManager {
     /**
      * In-flight PKCE state kept between [startAuthFlow] and [authenticateWithCode].
      * Cleared after a successful exchange or on cancellation.
+     *
+     * @Volatile ensures visibility across threads during the OAuth callback flow.
      */
-    private var pendingCodeVerifier: String? = null
-    private var pendingDeviceSerial: String? = null
-    private var pendingClientId: String? = null
+    @Volatile private var pendingCodeVerifier: String? = null
+    @Volatile private var pendingDeviceSerial: String? = null
+    @Volatile private var pendingClientId: String? = null
 
     // ── Paths ───────────────────────────────────────────────────────────────
 
