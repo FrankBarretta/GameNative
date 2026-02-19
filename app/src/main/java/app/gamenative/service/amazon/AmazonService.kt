@@ -60,7 +60,13 @@ class AmazonService : Service() {
 
     companion object {
         private const val ACTION_SYNC_LIBRARY = "app.gamenative.AMAZON_SYNC_LIBRARY"
+        private const val ACTION_MANUAL_SYNC = "app.gamenative.AMAZON_MANUAL_SYNC"
+        private const val SYNC_THROTTLE_MILLIS = 15 * 60 * 1000L // 15 minutes
         private var instance: AmazonService? = null
+
+        // Sync tracking variables
+        private var lastSyncTimestamp: Long = 0L
+        private var hasPerformedInitialSync: Boolean = false
 
         val isRunning: Boolean
             get() = instance != null
@@ -70,8 +76,28 @@ class AmazonService : Service() {
                 Timber.d("[Amazon] Service already running")
                 return
             }
+
             val intent = Intent(context, AmazonService::class.java)
-            intent.action = ACTION_SYNC_LIBRARY
+
+            // First-time start: always sync without throttle
+            if (!hasPerformedInitialSync) {
+                Timber.i("[Amazon] First-time start — starting service with initial sync")
+                intent.action = ACTION_SYNC_LIBRARY
+                context.startForegroundService(intent)
+                return
+            }
+
+            // Subsequent starts: check throttle for sync
+            val now = System.currentTimeMillis()
+            val timeSinceLastSync = now - lastSyncTimestamp
+
+            if (timeSinceLastSync >= SYNC_THROTTLE_MILLIS) {
+                Timber.i("[Amazon] Starting service with automatic sync (throttle passed)")
+                intent.action = ACTION_SYNC_LIBRARY
+            } else {
+                val remainingMinutes = (SYNC_THROTTLE_MILLIS - timeSinceLastSync) / 1000 / 60
+                Timber.i("[Amazon] Starting service without sync — throttled (${remainingMinutes}min remaining)")
+            }
             context.startForegroundService(intent)
         }
 
@@ -93,9 +119,16 @@ class AmazonService : Service() {
             authCode: String,
         ): Result<AmazonCredentials> = AmazonAuthManager.authenticateWithCode(context, authCode)
 
+        /**
+         * Trigger a manual library sync, bypassing the throttle.
+         */
         fun triggerLibrarySync(context: Context) {
-            val svc = instance ?: return
-            svc.serviceScope.launch { svc.syncLibrary() }
+            Timber.i("[Amazon] Manual sync requested — bypassing throttle")
+            if (isRunning) {
+                val intent = Intent(context, AmazonService::class.java)
+                intent.action = ACTION_MANUAL_SYNC
+                context.startForegroundService(intent)
+            }
         }
 
         // ── Install queries ───────────────────────────────────────────────────
@@ -344,7 +377,33 @@ class AmazonService : Service() {
         val notification = notificationHelper.createForegroundNotification("Amazon Games Running")
         startForeground(1, notification)
 
-        if (intent?.action == ACTION_SYNC_LIBRARY) {
+        val shouldSync = when (intent?.action) {
+            ACTION_MANUAL_SYNC -> {
+                Timber.i("[Amazon] Manual sync requested — bypassing throttle")
+                true
+            }
+            ACTION_SYNC_LIBRARY -> {
+                Timber.i("[Amazon] Automatic sync requested")
+                true
+            }
+            null -> {
+                // Service restarted by Android (START_STICKY)
+                val timeSinceLastSync = System.currentTimeMillis() - lastSyncTimestamp
+                val shouldResync = !hasPerformedInitialSync || timeSinceLastSync >= SYNC_THROTTLE_MILLIS
+                if (shouldResync) {
+                    Timber.i("[Amazon] Service restarted by Android — performing sync (initial=$hasPerformedInitialSync, elapsed=${timeSinceLastSync}ms)")
+                } else {
+                    Timber.d("[Amazon] Service restarted by Android — skipping sync (throttled)")
+                }
+                shouldResync
+            }
+            else -> {
+                Timber.d("[Amazon] Service started without sync action")
+                false
+            }
+        }
+
+        if (shouldSync) {
             serviceScope.launch { syncLibrary() }
         }
 
@@ -369,6 +428,9 @@ class AmazonService : Service() {
         try {
             amazonManager.refreshLibrary()
             refreshInstallInfoCache()
+            lastSyncTimestamp = System.currentTimeMillis()
+            hasPerformedInitialSync = true
+            Timber.i("[Amazon] Sync complete — next auto-sync in 15 minutes")
         } catch (e: Exception) {
             Timber.e(e, "[Amazon] Library sync failed")
         }
