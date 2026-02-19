@@ -1046,19 +1046,25 @@ fun SettingsGroupInterface(
             coroutineScope.launch {
                 try {
                     Timber.d("[SettingsAmazon]: Starting logout...")
-                    AmazonAuthManager.logout(context)
-                    // Stop service if running
-                    if (AmazonService.isRunning) {
-                        AmazonService.stop()
-                    }
+                    val result = AmazonService.logout(context)
                     withContext(Dispatchers.Main) {
                         amazonLogoutLoading = false
-                        Timber.i("[SettingsAmazon]: ✓ Logout successful!")
-                        android.widget.Toast.makeText(
-                            context,
-                            context.getString(R.string.amazon_logout_success),
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
+                        if (result.isSuccess) {
+                            Timber.i("[SettingsAmazon]: ✓ Logout successful!")
+                            android.widget.Toast.makeText(
+                                context,
+                                context.getString(R.string.amazon_logout_success),
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            val error = result.exceptionOrNull()?.message ?: "Unknown"
+                            Timber.e("[SettingsAmazon]: Logout failed: $error")
+                            android.widget.Toast.makeText(
+                                context,
+                                context.getString(R.string.amazon_logout_failed, error),
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
                     }
                 } catch (e: Exception) {
                     Timber.e(e, "[SettingsAmazon]: Logout exception: ${e.message}")

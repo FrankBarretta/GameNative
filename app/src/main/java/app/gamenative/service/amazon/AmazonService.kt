@@ -141,6 +141,41 @@ class AmazonService : Service() {
         ): Result<AmazonCredentials> = AmazonAuthManager.authenticateWithCode(context, authCode)
 
         /**
+         * Log out of Amazon Games.
+         * Deregisters the device, clears credentials, deletes non-installed games from DB,
+         * and stops the service.
+         */
+        suspend fun logout(context: Context): Result<Unit> {
+            return withContext(Dispatchers.IO) {
+                try {
+                    Timber.tag("Amazon").i("Starting logout...")
+
+                    // Deregister device and clear credentials
+                    AmazonAuthManager.logout(context)
+                    Timber.tag("Amazon").i("Credentials cleared")
+
+                    // Delete non-installed games from database
+                    val svc = instance
+                    if (svc != null) {
+                        svc.amazonManager.deleteAllNonInstalledGames()
+                        Timber.tag("Amazon").i("All non-installed Amazon games removed from database")
+                    } else {
+                        Timber.tag("Amazon").w("Service not running during logout, but credentials were cleared")
+                    }
+
+                    // Stop the service
+                    stop()
+
+                    Timber.tag("Amazon").i("Logout completed successfully")
+                    Result.success(Unit)
+                } catch (e: Exception) {
+                    Timber.tag("Amazon").e(e, "Error during logout")
+                    Result.failure(e)
+                }
+            }
+        }
+
+        /**
          * Trigger a manual library sync, bypassing the throttle.
          */
         fun triggerLibrarySync(context: Context) {

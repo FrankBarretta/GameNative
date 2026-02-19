@@ -66,6 +66,13 @@ interface AmazonGameDao {
     @Query("UPDATE amazon_games SET last_played = :lastPlayed, play_time_minutes = :playTimeMinutes WHERE id = :id")
     suspend fun updatePlaytime(id: String, lastPlayed: Long, playTimeMinutes: Long)
 
+    // Only delete non-installed games from DB - Need to preserve any currently installed games.
+    @Query("DELETE FROM amazon_games WHERE is_installed = false")
+    suspend fun deleteAllNonInstalledGames()
+
+    @Query("SELECT * FROM amazon_games WHERE id IN (:ids)")
+    suspend fun getGamesByIds(ids: List<String>): List<AmazonGame>
+
     /**
      * Upsert Amazon games while preserving install status and install path.
      * Used when refreshing the library from the Amazon API — we don't want to

@@ -94,4 +94,10 @@ class AmazonManager @Inject constructor(
     suspend fun getBearerToken(): String? = withContext(Dispatchers.IO) {
         AmazonAuthManager.getStoredCredentials(context).getOrNull()?.accessToken
     }
+
+    /** Delete all non-installed Amazon games from DB on logout. */
+    suspend fun deleteAllNonInstalledGames() = withContext(Dispatchers.IO) {
+        amazonGameDao.deleteAllNonInstalledGames()
+        Timber.i("[Amazon] Deleted all non-installed games from DB")
+    }
 }
