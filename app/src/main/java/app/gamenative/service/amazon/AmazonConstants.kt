@@ -54,6 +54,10 @@ object AmazonConstants {
     // ── User-Agent ──────────────────────────────────────────────────────────
     const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
 
+    // ── SDK / Launcher channel ──────────────────────────────────────────────
+    /** Amazon Games Launcher channel ID — source for FuelSDK + AmazonGamesSDK DLLs. */
+    const val LAUNCHER_CHANNEL_ID = "87d38116-4cbf-4af0-a371-a5b498975346"
+
     /**
      * Returns the default installation directory for an Amazon game.
      * Sanitises [gameTitle] to be filesystem-safe.

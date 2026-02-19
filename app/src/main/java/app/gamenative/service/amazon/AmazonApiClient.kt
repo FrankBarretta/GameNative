@@ -397,9 +397,6 @@ object AmazonApiClient {
 
     // ── SDK / Launcher channel ──────────────────────────────────────────────────────────────
 
-    /** Amazon Games Launcher channel ID — source for FuelSDK + AmazonGamesSDK DLLs. */
-    private const val LAUNCHER_CHANNEL_ID = "87d38116-4cbf-4af0-a371-a5b498975346"
-
     /**
      * Fetches the download spec for the Amazon Games Launcher / SDK channel.
      *
@@ -414,7 +411,7 @@ object AmazonApiClient {
     suspend fun fetchSdkDownload(
         bearerToken: String,
     ): GameDownloadSpec? = withContext(Dispatchers.IO) {
-        val url = "$DISTRIBUTION_URL/download/channel/$LAUNCHER_CHANNEL_ID"
+        val url = "$DISTRIBUTION_URL/download/channel/${AmazonConstants.LAUNCHER_CHANNEL_ID}"
         Timber.tag("Amazon").d("fetchSdkDownload: GET $url")
 
         try {
