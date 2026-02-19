@@ -54,7 +54,7 @@ android {
         applicationId = "app.gamenative"
 
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 28
 
         versionCode = 11
         versionName = "0.7.2"
