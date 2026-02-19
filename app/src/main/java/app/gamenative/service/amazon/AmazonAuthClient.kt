@@ -196,6 +196,7 @@ object AmazonAuthClient {
                 Timber.w("[Amazon] Deregister returned ${response.code}: $errorBody")
                 // Non-fatal: credentials will still be cleared locally
             } else {
+                response.body?.close() // Close response body on success path
                 Timber.i("[Amazon] Device deregistered successfully")
             }
 
