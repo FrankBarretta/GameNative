@@ -497,6 +497,7 @@ class LibraryViewModel @Inject constructor(
             // Calculate installed counts
             val gogInstalledCount = filteredGOGGames.count { it.isInstalled }
             val epicInstalledCount = filteredEpicGames.count { it.isInstalled }
+            val amazonInstalledCount = filteredAmazonGames.count { it.isInstalled }
             // Save game counts for skeleton loaders (only when not searching, to get accurate counts)
             // This needs to happen before filtering by source, so we save the total counts
             if (currentState.searchQuery.isEmpty()) {
@@ -506,7 +507,8 @@ class LibraryViewModel @Inject constructor(
                 PrefManager.gogInstalledGamesCount = gogInstalledCount
                 PrefManager.epicGamesCount = filteredEpicGames.size
                 PrefManager.epicInstalledGamesCount = epicInstalledCount
-                Timber.tag("LibraryViewModel").d("Saved counts - Custom: ${customGameItems.size}, Steam: ${filteredSteamApps.size}, GOG: ${filteredGOGGames.size}, GOG installed: $gogInstalledCount, Epic: ${filteredEpicGames.size}, Epic installed: $epicInstalledCount")
+                PrefManager.amazonInstalledGamesCount = amazonInstalledCount
+                Timber.tag("LibraryViewModel").d("Saved counts - Custom: ${customGameItems.size}, Steam: ${filteredSteamApps.size}, GOG: ${filteredGOGGames.size}, GOG installed: $gogInstalledCount, Epic: ${filteredEpicGames.size}, Epic installed: $epicInstalledCount, Amazon installed: $amazonInstalledCount")
             }
 
             // Apply App Source filters

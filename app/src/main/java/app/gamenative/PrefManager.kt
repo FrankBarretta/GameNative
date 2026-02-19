@@ -809,6 +809,13 @@ object PrefManager {
             setPref(EPIC_INSTALLED_GAMES_COUNT, value)
         }
 
+    private val AMAZON_INSTALLED_GAMES_COUNT = intPreferencesKey("amazon_installed_games_count")
+    var amazonInstalledGamesCount: Int
+        get() = getPref(AMAZON_INSTALLED_GAMES_COUNT, 0)
+        set(value) {
+            setPref(AMAZON_INSTALLED_GAMES_COUNT, value)
+        }
+
     // Show dialog when adding custom game folder
     private val SHOW_ADD_CUSTOM_GAME_DIALOG = booleanPreferencesKey("show_add_custom_game_dialog")
     var showAddCustomGameDialog: Boolean
