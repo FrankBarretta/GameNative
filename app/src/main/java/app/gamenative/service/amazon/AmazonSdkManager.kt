@@ -1,12 +1,12 @@
 package app.gamenative.service.amazon
 
 import android.content.Context
+import app.gamenative.utils.Net
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.Request
 import timber.log.Timber
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 
 /**
  * Manages Amazon Games SDK files (FuelSDK, AmazonGamesSDK) needed for DRM authentication.
@@ -223,14 +223,18 @@ object AmazonSdkManager {
     // ── Download helpers ─────────────────────────────────────────────────────
 
     private fun fetchBytes(url: String): ByteArray? = try {
-        val conn = URL(url).openConnection() as HttpURLConnection
-        conn.connectTimeout = 15_000
-        conn.readTimeout = 60_000
-        if (conn.responseCode == HttpURLConnection.HTTP_OK) {
-            conn.inputStream.use { it.readBytes() }
-        } else {
-            Timber.tag(TAG).e("fetchBytes: HTTP ${conn.responseCode} for $url")
-            null
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .build()
+
+        Net.http.newCall(request).execute().use { response ->
+            if (response.isSuccessful) {
+                response.body?.bytes()
+            } else {
+                Timber.tag(TAG).e("fetchBytes: HTTP ${response.code} for $url")
+                null
+            }
         }
     } catch (e: Exception) {
         Timber.tag(TAG).e(e, "fetchBytes failed: $url")
@@ -240,23 +244,27 @@ object AmazonSdkManager {
     private fun downloadFile(url: String, destFile: File): Boolean = try {
         destFile.parentFile?.mkdirs()
         val tmpFile = File(destFile.parentFile, "${destFile.name}.tmp")
-        val conn = URL(url).openConnection() as HttpURLConnection
-        conn.connectTimeout = 15_000
-        conn.readTimeout = 120_000
 
-        if (conn.responseCode == HttpURLConnection.HTTP_OK) {
-            conn.inputStream.use { input ->
-                tmpFile.outputStream().use { output ->
-                    input.copyTo(output, bufferSize = 8192)
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .build()
+
+        Net.http.newCall(request).execute().use { response ->
+            if (response.isSuccessful) {
+                response.body?.byteStream()?.use { input ->
+                    tmpFile.outputStream().use { output ->
+                        input.copyTo(output, bufferSize = 8192)
+                    }
                 }
+                if (destFile.exists()) destFile.delete()
+                tmpFile.renameTo(destFile)
+                true
+            } else {
+                Timber.tag(TAG).e("downloadFile: HTTP ${response.code} for $url")
+                tmpFile.delete()
+                false
             }
-            if (destFile.exists()) destFile.delete()
-            tmpFile.renameTo(destFile)
-            true
-        } else {
-            Timber.tag(TAG).e("downloadFile: HTTP ${conn.responseCode} for $url")
-            tmpFile.delete()
-            false
         }
     } catch (e: Exception) {
         Timber.tag(TAG).e(e, "downloadFile failed: $url")
