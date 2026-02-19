@@ -65,6 +65,10 @@ data class AmazonGame(
     @ColumnInfo(name = "install_size", defaultValue = "0")
     val installSize: Long = 0,
 
+    /** Amazon version ID returned by GetGameDownload, stored at install time for update checking. */
+    @ColumnInfo(name = "version_id", defaultValue = "")
+    val versionId: String = "",
+
     /** Raw product JSON kept for manifest lookup, etc. */
     @ColumnInfo("product_json")
     val productJson: String = "",

@@ -53,11 +53,11 @@ interface AmazonGameDao {
     suspend fun deleteAll()
 
     @Query(
-        "UPDATE amazon_games SET is_installed = 1, install_path = :path, install_size = :size WHERE id = :id",
+        "UPDATE amazon_games SET is_installed = 1, install_path = :path, install_size = :size, version_id = :versionId WHERE id = :id",
     )
-    suspend fun markAsInstalled(id: String, path: String, size: Long)
+    suspend fun markAsInstalled(id: String, path: String, size: Long, versionId: String)
 
-    @Query("UPDATE amazon_games SET is_installed = 0, install_path = '', install_size = 0 WHERE id = :id")
+    @Query("UPDATE amazon_games SET is_installed = 0, install_path = '', install_size = 0, version_id = '' WHERE id = :id")
     suspend fun markAsUninstalled(id: String)
 
     @Query("UPDATE amazon_games SET download_size = :size WHERE id = :id")
@@ -79,11 +79,13 @@ interface AmazonGameDao {
             if (game.id in existingIds) {
                 val existing = getById(game.id)
                 if (existing != null) {
-                    // Preserve install status/path from DB
+                    // Preserve install-related fields from DB
                     toUpdate.add(
                         game.copy(
                             isInstalled = existing.isInstalled,
                             installPath = existing.installPath,
+                            installSize = existing.installSize,
+                            versionId = existing.versionId,
                         )
                     )
                 } else {

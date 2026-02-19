@@ -60,11 +60,11 @@ class AmazonManager @Inject constructor(
         amazonGameDao.getById(productId)
     }
 
-    /** Mark a game as installed and persist its install path and size. */
-    suspend fun markInstalled(productId: String, installPath: String, installSize: Long) =
+    /** Mark a game as installed and persist its install path, size, and version. */
+    suspend fun markInstalled(productId: String, installPath: String, installSize: Long, versionId: String = "") =
         withContext(Dispatchers.IO) {
-            amazonGameDao.markAsInstalled(productId, installPath, installSize)
-            Timber.i("[Amazon] Marked installed: $productId at $installPath (${installSize}B)")
+            amazonGameDao.markAsInstalled(productId, installPath, installSize, versionId)
+            Timber.i("[Amazon] Marked installed: $productId at $installPath (${installSize}B, version=$versionId)")
         }
 
     /** Mark a game as not installed (clears install path and size). */

@@ -44,6 +44,7 @@ class AmazonDownloadManager @Inject constructor(
         private const val MAX_PARALLEL_DOWNLOADS = 6
         private const val MAX_RETRIES = 3
         private const val RETRY_DELAY_MS = 1000L
+        private const val PROGRESS_EMIT_INTERVAL = 512 * 1024L // Emit UI progress every 512 KB
         private const val TAG = "Amazon"
     }
 
@@ -147,7 +148,8 @@ class AmazonDownloadManager @Inject constructor(
             }
 
             // ── 6. Persist installed state ───────────────────────────────────
-            amazonManager.markInstalled(productId, installPath, manifest.totalInstallSize)
+            Timber.tag(TAG).i("Persisting install: productId=$productId, version=${spec.versionId}")
+            amazonManager.markInstalled(productId, installPath, manifest.totalInstallSize, spec.versionId)
 
             MarkerUtils.removeMarker(installPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
             MarkerUtils.addMarker(installPath, Marker.DOWNLOAD_COMPLETE_MARKER)
@@ -238,9 +240,16 @@ class AmazonDownloadManager @Inject constructor(
                     tmpFile.outputStream().use { output ->
                         val buf = ByteArray(8192)
                         var read: Int
+                        var bytesSinceLastEmit = 0L
                         while (input.read(buf).also { read = it } != -1) {
                             output.write(buf, 0, read)
                             downloadInfo.updateBytesDownloaded(read.toLong())
+                            bytesSinceLastEmit += read
+                            // Emit progress every ~512 KB so UI updates smoothly during large files
+                            if (bytesSinceLastEmit >= PROGRESS_EMIT_INTERVAL) {
+                                bytesSinceLastEmit = 0L
+                                downloadInfo.emitProgressChange()
+                            }
                         }
                     }
                 }
