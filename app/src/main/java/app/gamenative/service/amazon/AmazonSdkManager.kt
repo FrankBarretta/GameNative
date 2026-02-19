@@ -119,7 +119,7 @@ object AmazonSdkManager {
             var failed = 0
 
             for (file in sdkFiles) {
-                val hashHex = file.hashBytes.joinToString("") { "%02x".format(it) }
+                val hashHex = file.hashBytes.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
                 val fileUrl = AmazonApiClient.appendPath(spec.downloadUrl, "files/$hashHex")
                 val destFile = File(sdkRoot, file.unixPath)
 
