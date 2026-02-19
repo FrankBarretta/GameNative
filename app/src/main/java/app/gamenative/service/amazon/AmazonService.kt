@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.IBinder
 import app.gamenative.PluviaApp
+import app.gamenative.R
 import app.gamenative.data.AmazonCredentials
 import app.gamenative.data.AmazonGame
 import app.gamenative.data.DownloadInfo
@@ -678,7 +679,7 @@ class AmazonService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = notificationHelper.createForegroundNotification("Amazon Games Running")
+        val notification = notificationHelper.createForegroundNotification(getString(R.string.amazon_service_running))
         startForeground(1, notification)
 
         val shouldSync = when (intent?.action) {
