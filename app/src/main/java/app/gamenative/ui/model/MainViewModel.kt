@@ -332,6 +332,12 @@ class MainViewModel @Inject constructor(
                         Timber.tag("Epic").e(e, "[Cloud Saves] Exception during upload sync for $gameId")
                     }
                 }
+            } else if (gameSource == GameSource.AMAZON) {
+                // Record playtime for Amazon games
+                Timber.tag("Amazon").i("Amazon Game exited for $appId — recording playtime")
+                viewModelScope.launch(Dispatchers.IO) {
+                    app.gamenative.service.amazon.AmazonService.recordSessionPlaytime()
+                }
             } else {
                 // For Steam games, sync cloud saves
                 SteamService.closeApp(gameId, isOffline.value) { prefix ->

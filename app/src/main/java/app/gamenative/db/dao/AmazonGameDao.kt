@@ -63,6 +63,9 @@ interface AmazonGameDao {
     @Query("UPDATE amazon_games SET download_size = :size WHERE id = :id")
     suspend fun updateDownloadSize(id: String, size: Long)
 
+    @Query("UPDATE amazon_games SET last_played = :lastPlayed, play_time_minutes = :playTimeMinutes WHERE id = :id")
+    suspend fun updatePlaytime(id: String, lastPlayed: Long, playTimeMinutes: Long)
+
     /**
      * Upsert Amazon games while preserving install status and install path.
      * Used when refreshing the library from the Amazon API — we don't want to
@@ -79,7 +82,7 @@ interface AmazonGameDao {
             if (game.id in existingIds) {
                 val existing = getById(game.id)
                 if (existing != null) {
-                    // Preserve install-related fields from DB
+                    // Preserve install-related fields and playtime from DB
                     toUpdate.add(
                         game.copy(
                             isInstalled = existing.isInstalled,
@@ -87,6 +90,8 @@ interface AmazonGameDao {
                             installSize = existing.installSize,
                             versionId = existing.versionId,
                             productSku = if (game.productSku.isNotEmpty()) game.productSku else existing.productSku,
+                            lastPlayed = existing.lastPlayed,
+                            playTimeMinutes = existing.playTimeMinutes,
                         )
                     )
                 } else {

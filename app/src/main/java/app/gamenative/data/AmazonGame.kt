@@ -73,6 +73,14 @@ data class AmazonGame(
     @ColumnInfo(name = "product_sku", defaultValue = "")
     val productSku: String = "",
 
+    /** Epoch millis of the last time the game was launched. 0 = never played. */
+    @ColumnInfo(name = "last_played", defaultValue = "0")
+    val lastPlayed: Long = 0,
+
+    /** Cumulative play time in seconds. */
+    @ColumnInfo(name = "play_time_minutes", defaultValue = "0")
+    val playTimeMinutes: Long = 0,
+
     /** Raw product JSON kept for manifest lookup, etc. */
     @ColumnInfo("product_json")
     val productJson: String = "",

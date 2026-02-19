@@ -84,6 +84,12 @@ class AmazonManager @Inject constructor(
         Timber.i("[Amazon] Updated download size for $productId: $size bytes")
     }
 
+    /** Record playtime after a game session ends. */
+    suspend fun updatePlaytime(productId: String, lastPlayed: Long, playTimeMinutes: Long) = withContext(Dispatchers.IO) {
+        amazonGameDao.updatePlaytime(productId, lastPlayed, playTimeMinutes)
+        Timber.i("[Amazon] Updated playtime for $productId: lastPlayed=$lastPlayed, totalMinutes=$playTimeMinutes")
+    }
+
     /** Get the stored bearer token (needed by AmazonDownloadManager). */
     suspend fun getBearerToken(): String? = withContext(Dispatchers.IO) {
         AmazonAuthManager.getStoredCredentials(context).getOrNull()?.accessToken

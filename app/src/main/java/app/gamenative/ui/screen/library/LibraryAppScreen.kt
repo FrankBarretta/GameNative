@@ -695,8 +695,10 @@ internal fun AppScreenContent(
                             columns = GridCells.Fixed(2),
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            // Setting a fixed height to avoid nested scrolling issues
-                            modifier = Modifier.height(220.dp)
+                            // Dynamic height based on content to avoid nested scrolling issues
+                            modifier = Modifier.height(
+                                if (displayInfo.lastPlayedText != null || displayInfo.playtimeText != null) 280.dp else 220.dp
+                            )
                         ) {
                             // Status item
                             item {
@@ -757,6 +759,42 @@ internal fun AppScreenContent(
                                         },
                                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
                                     )
+                                }
+                            }
+
+                            // Last Played item (only shown when available)
+                            if (displayInfo.lastPlayedText != null) {
+                                item {
+                                    Column {
+                                        Text(
+                                            text = stringResource(R.string.last_played),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = displayInfo.lastPlayedText,
+                                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Playtime item (only shown when available)
+                            if (displayInfo.playtimeText != null) {
+                                item {
+                                    Column {
+                                        Text(
+                                            text = stringResource(R.string.playtime),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = displayInfo.playtimeText,
+                                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
+                                        )
+                                    }
                                 }
                             }
 
