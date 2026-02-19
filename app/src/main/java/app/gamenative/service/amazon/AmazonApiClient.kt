@@ -125,7 +125,7 @@ object AmazonApiClient {
                 requestMethod = "POST"
                 setRequestProperty("X-Amz-Target", target)
                 setRequestProperty("x-amzn-token", bearerToken)
-                setRequestProperty("UserAgent", USER_AGENT)
+                setRequestProperty("User-Agent", USER_AGENT)
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("Content-Encoding", "amz-1.0")
                 doOutput = true
@@ -422,7 +422,7 @@ object AmazonApiClient {
             connection.apply {
                 requestMethod = "GET"
                 setRequestProperty("x-amzn-token", bearerToken)
-                setRequestProperty("UserAgent", USER_AGENT)
+                setRequestProperty("User-Agent", USER_AGENT)
                 connectTimeout = 15_000
                 readTimeout = 30_000
             }
