@@ -36,6 +36,9 @@ object AmazonApiClient {
     private const val GET_GAME_DOWNLOAD_TARGET =
         "com.amazon.animusdistributionservice.external.AnimusDistributionService.GetGameDownload"
 
+    private const val GET_LIVE_VERSION_IDS_TARGET =
+        "com.amazon.animusdistributionservice.external.AnimusDistributionService.GetLiveVersionIds"
+
     private const val USER_AGENT = "com.amazon.agslauncher.win/3.0.9202.1"
     private const val KEY_ID = "d5dc8b8b-86c8-4fc4-ae93-18c0def5314d"
 
@@ -272,6 +275,80 @@ object AmazonApiClient {
         val versionId = response.optString("versionId", "")
         Timber.i("[Amazon] GetGameDownload: versionId=$versionId url=$downloadUrl")
         GameDownloadSpec(downloadUrl = downloadUrl, versionId = versionId)
+    }
+
+    // ── Live version checking ───────────────────────────────────────────────────────
+
+    /**
+     * Fetches live version IDs for a list of product IDs.
+     *
+     * Mirrors nile’s `Library.get_live_version_ids(product_ids)` which calls
+     * `AnimusDistributionService.GetLiveVersionIds`.
+     *
+     * @param adgProductIds  List of Amazon product IDs (e.g. "amzn1.adg.product.XXXX").
+     * @param bearerToken    The `access_token` from [AmazonAuthManager].
+     * @return Map of productId → liveVersionId, or null on failure.
+     */
+    suspend fun fetchLiveVersionIds(
+        adgProductIds: List<String>,
+        bearerToken: String,
+    ): Map<String, String>? = withContext(Dispatchers.IO) {
+        if (adgProductIds.isEmpty()) return@withContext emptyMap()
+
+        val idsArray = org.json.JSONArray(adgProductIds)
+        val body = JSONObject().apply {
+            put("adgProductIds", idsArray)
+            put("Operation", "GetLiveVersionIds")
+        }
+
+        Timber.tag("Amazon").d("fetchLiveVersionIds: ${adgProductIds.size} product(s)")
+
+        val response = postJson(
+            url = DISTRIBUTION_URL,
+            target = GET_LIVE_VERSION_IDS_TARGET,
+            bearerToken = bearerToken,
+            body = body,
+        ) ?: return@withContext null
+
+        // Response shape: { "adgProductIdToVersionIdMap": { "productId1": "versionId1", ... } }
+        val versions = response.optJSONObject("adgProductIdToVersionIdMap")
+        if (versions == null) {
+            Timber.tag("Amazon").w("GetLiveVersionIds: no 'adgProductIdToVersionIdMap' in response: ${response.toString().take(500)}")
+            return@withContext null
+        }
+
+        val result = mutableMapOf<String, String>()
+        for (key in versions.keys()) {
+            result[key] = versions.optString(key, "")
+        }
+        Timber.tag("Amazon").i("GetLiveVersionIds: ${result.size} version(s) returned")
+        result
+    }
+
+    /**
+     * Checks whether a single game has an update available by comparing the stored
+     * [AmazonGame.versionId] with the live version from Amazon.
+     *
+     * @return `true` if the live version differs from the stored version, `false` if up-to-date,
+     *         or `null` on API failure.
+     */
+    suspend fun isUpdateAvailable(
+        productId: String,
+        storedVersionId: String,
+        bearerToken: String,
+    ): Boolean? = withContext(Dispatchers.IO) {
+        val liveVersions = fetchLiveVersionIds(listOf(productId), bearerToken)
+            ?: return@withContext null
+        val liveVersion = liveVersions[productId]
+        if (liveVersion.isNullOrEmpty()) {
+            Timber.tag("Amazon").w("isUpdateAvailable: no live version returned for $productId")
+            return@withContext null
+        }
+        val updateAvailable = liveVersion != storedVersionId
+        Timber.tag("Amazon").i(
+            "isUpdateAvailable: productId=$productId stored=$storedVersionId live=$liveVersion update=$updateAvailable"
+        )
+        updateAvailable
     }
 
     // ── Download size pre-fetch ──────────────────────────────────────────────────────────────

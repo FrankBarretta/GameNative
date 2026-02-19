@@ -135,6 +135,20 @@ class AmazonService : Service() {
         /** Deprecated name kept for call-site compatibility — delegates to [getInstallPath]. */
         fun getInstalledGamePath(gameId: String): String? = getInstallPath(gameId)
 
+        /**
+         * Checks whether an installed Amazon game has a newer version available.
+         * Compares the stored [AmazonGame.versionId] against the live version from Amazon.
+         *
+         * @return `true` if an update is available, `false` otherwise (including API failures).
+         */
+        suspend fun isUpdatePending(productId: String): Boolean {
+            val svc = instance ?: return false
+            val game = svc.amazonManager.getGameById(productId) ?: return false
+            if (!game.isInstalled || game.versionId.isEmpty()) return false
+            val token = svc.amazonManager.getBearerToken() ?: return false
+            return AmazonApiClient.isUpdateAvailable(productId, game.versionId, token) ?: false
+        }
+
         // ── Download management ───────────────────────────────────────────────
 
         /** Returns the active [DownloadInfo] for [productId], or null if not downloading. */

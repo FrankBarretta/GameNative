@@ -320,7 +320,13 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
     }
 
     override fun onUpdateClick(context: Context, libraryItem: LibraryItem) {
-        // Not applicable yet
+        Timber.tag(TAG).i("onUpdateClick: re-downloading ${productIdOf(libraryItem)}")
+        performDownload(context, libraryItem)
+    }
+
+    override suspend fun isUpdatePendingSuspend(context: Context, libraryItem: LibraryItem): Boolean {
+        val productId = productIdOf(libraryItem)
+        return AmazonService.isUpdatePending(productId)
     }
 
     override fun getInstallPath(context: Context, libraryItem: LibraryItem): String? {
