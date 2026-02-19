@@ -132,12 +132,30 @@ class AmazonAppScreen : BaseAppScreen() {
 
         var game by remember(productId) { mutableStateOf<AmazonGame?>(null) }
 
-        LaunchedEffect(productId) {
+        // Refresh key — incremented when install status changes so we re-fetch from DB.
+        // This ensures size/installPath/etc. are up-to-date after download completes.
+        var refreshKey by remember(productId) { mutableStateOf(0) }
+
+        androidx.compose.runtime.DisposableEffect(productId) {
+            val listener: (app.gamenative.events.AndroidEvent.LibraryInstallStatusChanged) -> Unit = { event ->
+                if (event.appId == productId.hashCode()) {
+                    Timber.tag(TAG).d("[REFRESH] Install status changed for $productId — refreshing game info")
+                    refreshKey++
+                }
+            }
+            app.gamenative.PluviaApp.events.on<app.gamenative.events.AndroidEvent.LibraryInstallStatusChanged, Unit>(listener)
+            onDispose {
+                app.gamenative.PluviaApp.events.off<app.gamenative.events.AndroidEvent.LibraryInstallStatusChanged, Unit>(listener)
+            }
+        }
+
+        LaunchedEffect(productId, refreshKey) {
             game = AmazonService.getAmazonGameOf(productId)
             Timber.tag(TAG).d(
                 "Loaded game: title=${game?.title}, developer=${game?.developer}, " +
                     "releaseDate=${game?.releaseDate}, artUrl=${game?.artUrl?.take(60)}, " +
-                    "heroUrl=${game?.heroUrl?.take(60)}, downloadSize=${game?.downloadSize}"
+                    "heroUrl=${game?.heroUrl?.take(60)}, downloadSize=${game?.downloadSize}, " +
+                    "installSize=${game?.installSize}, isInstalled=${game?.isInstalled}"
             )
             // Proactively fetch size from manifest if not yet cached
             val g = game
