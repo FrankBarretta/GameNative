@@ -177,14 +177,13 @@ class AmazonService : Service() {
 
         /**
          * Trigger a manual library sync, bypassing the throttle.
+         * If the service isn't running, it will be started with a sync action.
          */
         fun triggerLibrarySync(context: Context) {
             Timber.i("[Amazon] Manual sync requested — bypassing throttle")
-            if (isRunning) {
-                val intent = Intent(context, AmazonService::class.java)
-                intent.action = ACTION_MANUAL_SYNC
-                context.startForegroundService(intent)
-            }
+            val intent = Intent(context, AmazonService::class.java)
+            intent.action = ACTION_MANUAL_SYNC
+            context.startForegroundService(intent)
         }
 
         // ── Install queries ───────────────────────────────────────────────────
