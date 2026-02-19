@@ -68,7 +68,7 @@ object AmazonApiClient {
         Timber.i("[Amazon] Fetching entitlements (hardwareHash=${hardwareHash.take(8)}…)")
 
         do {
-            val requestBody = buildRequestBody(nextToken, hardwareHash)
+            val requestBody = buildGetEntitlementsRequestBody(nextToken, hardwareHash)
             val responseJson = postJson(
                 url = ENTITLEMENTS_URL,
                 target = GET_ENTITLEMENTS_TARGET,
@@ -101,7 +101,7 @@ object AmazonApiClient {
 
     // ── Private helpers ──────────────────────────────────────────────────────
 
-    private fun buildRequestBody(nextToken: String?, hardwareHash: String): JSONObject =
+    private fun buildGetEntitlementsRequestBody(nextToken: String?, hardwareHash: String): JSONObject =
         JSONObject().apply {
             put("Operation", "GetEntitlements")
             put("clientId", "Sonic")
