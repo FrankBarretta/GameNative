@@ -28,6 +28,7 @@ import com.winlator.container.ContainerData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.time.LocalDate
 import java.time.ZonedDateTime
@@ -272,19 +273,25 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
 
     private fun performDownload(context: Context, libraryItem: LibraryItem) {
         val productId = productIdOf(libraryItem)
-        val game = AmazonService.getAmazonGameOf(productId) ?: run {
-            Toast.makeText(context, "Game not found — try syncing library", Toast.LENGTH_SHORT).show()
-            Timber.tag(TAG).w("performDownload: game not found for $productId")
-            return
-        }
-        val installPath = AmazonConstants.getGameInstallPath(context, game.title)
-        Timber.tag(TAG).i("Downloading '${game.title}' → $installPath")
+        CoroutineScope(Dispatchers.IO).launch {
+            val game = AmazonService.getAmazonGameOf(productId) ?: run {
+                Timber.tag(TAG).w("performDownload: game not found for $productId")
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Game not found — try syncing library", Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+            val installPath = AmazonConstants.getGameInstallPath(context, game.title)
+            Timber.tag(TAG).i("Downloading '${game.title}' → $installPath")
 
-        val result = AmazonService.downloadGame(context, productId, installPath)
-        if (result.isFailure) {
-            val msg = result.exceptionOrNull()?.message ?: "Unknown error"
-            Toast.makeText(context, "Failed to start download: $msg", Toast.LENGTH_LONG).show()
-            Timber.tag(TAG).e("downloadGame failed: $msg")
+            val result = AmazonService.downloadGame(context, productId, installPath)
+            if (result.isFailure) {
+                val msg = result.exceptionOrNull()?.message ?: "Unknown error"
+                Timber.tag(TAG).e("downloadGame failed: $msg")
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Failed to start download: $msg", Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 

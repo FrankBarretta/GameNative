@@ -18,7 +18,12 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Inject
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 /**
@@ -44,6 +49,14 @@ class AmazonService : Service() {
 
     // Active downloads keyed by Amazon product ID (e.g. "amzn1.adg.product.XXXX")
     private val activeDownloads = ConcurrentHashMap<String, DownloadInfo>()
+
+    // In-memory cache for install status + path — avoids runBlocking for fast UI lookups
+    private val installInfoCache = ConcurrentHashMap<String, CachedInstallInfo>()
+
+    private data class CachedInstallInfo(
+        val isInstalled: Boolean,
+        val installPath: String,
+    )
 
     companion object {
         private const val ACTION_SYNC_LIBRARY = "app.gamenative.AMAZON_SYNC_LIBRARY"
@@ -107,29 +120,29 @@ class AmazonService : Service() {
         }
 
         /**
-         * Returns true if the Amazon game with [productId] is marked as installed in the DB.
+         * Returns true if the Amazon game with [productId] is marked as installed.
+         * Reads from the in-memory cache — no DB query, no thread blocking.
          */
         fun isGameInstalled(productId: String): Boolean {
-            return runBlocking(Dispatchers.IO) {
-                instance?.amazonManager?.getGameById(productId)?.isInstalled == true
-            }
+            return instance?.installInfoCache?.get(productId)?.isInstalled ?: false
         }
 
         /**
          * Returns the [AmazonGame] for the given product ID, or null if not found / service not up.
          */
-        fun getAmazonGameOf(productId: String): AmazonGame? {
-            return runBlocking(Dispatchers.IO) {
+        suspend fun getAmazonGameOf(productId: String): AmazonGame? {
+            return withContext(Dispatchers.IO) {
                 instance?.amazonManager?.getGameById(productId)
             }
         }
 
         /**
          * Returns the on-disk install path for [productId], or null if not installed.
+         * Reads from the in-memory cache — no DB query, no thread blocking.
          */
         fun getInstallPath(productId: String): String? {
-            val game = getAmazonGameOf(productId) ?: return null
-            return if (game.isInstalled && game.installPath.isNotEmpty()) game.installPath else null
+            val info = instance?.installInfoCache?.get(productId) ?: return null
+            return if (info.isInstalled && info.installPath.isNotEmpty()) info.installPath else null
         }
 
         /** Deprecated name kept for call-site compatibility — delegates to [getInstallPath]. */
@@ -164,7 +177,7 @@ class AmazonService : Service() {
          *
          * @return A [DownloadInfo] the UI can observe for progress/status updates.
          */
-        fun downloadGame(
+        suspend fun downloadGame(
             context: Context,
             productId: String,
             installPath: String,
@@ -178,7 +191,7 @@ class AmazonService : Service() {
                 return Result.success(existing)
             }
 
-            val game = runBlocking(Dispatchers.IO) {
+            val game = withContext(Dispatchers.IO) {
                 instance.amazonManager.getGameById(productId)
             } ?: return Result.failure(Exception("Game not found: $productId"))
 
@@ -205,6 +218,11 @@ class AmazonService : Service() {
 
                     if (result.isSuccess) {
                         Timber.tag("Amazon").i("Download succeeded for $productId")
+                        // Update install info cache
+                        instance.installInfoCache[productId] = CachedInstallInfo(
+                            isInstalled = true,
+                            installPath = installPath,
+                        )
                         withContext(Dispatchers.Main) {
                             android.widget.Toast.makeText(
                                 context,
@@ -279,6 +297,12 @@ class AmazonService : Service() {
 
                     instance.amazonManager.markUninstalled(productId)
 
+                    // Update install info cache
+                    instance.installInfoCache[productId] = CachedInstallInfo(
+                        isInstalled = false,
+                        installPath = "",
+                    )
+
                     // Delete cached manifest
                     try {
                         val manifestFile = File(context.filesDir, "manifests/amazon/$productId.proto")
@@ -344,8 +368,27 @@ class AmazonService : Service() {
     private suspend fun syncLibrary() {
         try {
             amazonManager.refreshLibrary()
+            refreshInstallInfoCache()
         } catch (e: Exception) {
             Timber.e(e, "[Amazon] Library sync failed")
         }
+    }
+
+    /**
+     * Populate the in-memory install info cache from the DB.
+     * Called after library sync so that [isGameInstalled] and [getInstallPath]
+     * can answer without blocking.
+     */
+    private suspend fun refreshInstallInfoCache() {
+        val games = withContext(Dispatchers.IO) {
+            amazonManager.getAllGames()
+        }
+        for (game in games) {
+            installInfoCache[game.id] = CachedInstallInfo(
+                isInstalled = game.isInstalled,
+                installPath = game.installPath,
+            )
+        }
+        Timber.d("[Amazon] Install info cache refreshed: ${games.size} entries")
     }
 }

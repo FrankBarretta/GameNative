@@ -60,6 +60,11 @@ class AmazonManager @Inject constructor(
         amazonGameDao.getById(productId)
     }
 
+    /** Return all Amazon games from the DB (for cache population). */
+    suspend fun getAllGames(): List<AmazonGame> = withContext(Dispatchers.IO) {
+        amazonGameDao.getAllAsList()
+    }
+
     /** Mark a game as installed and persist its install path, size, and version. */
     suspend fun markInstalled(productId: String, installPath: String, installSize: Long, versionId: String = "") =
         withContext(Dispatchers.IO) {
