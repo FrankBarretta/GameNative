@@ -60,7 +60,7 @@ object AmazonConstants {
      */
     fun getGameInstallPath(context: Context, gameTitle: String): String {
         val sanitized = gameTitle.replace(Regex("[^a-zA-Z0-9 \\-_]"), "").trim()
-        val base = File(context.getExternalFilesDir(null), "AmazonGames")
+        val base = File(context.getExternalFilesDir(null) ?: context.filesDir, "AmazonGames")
         return File(base, sanitized).absolutePath
     }
 
