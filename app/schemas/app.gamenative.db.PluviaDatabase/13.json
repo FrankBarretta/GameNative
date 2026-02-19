@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 13,
-    "identityHash": "48fd0cde503b67fb7ce65dbc1d7b950c",
+    "identityHash": "de76f94807f1918c0992d05959f705b6",
     "entities": [
       {
         "tableName": "app_info",
@@ -994,13 +994,20 @@
       },
       {
         "tableName": "amazon_games",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `is_installed` INTEGER NOT NULL, `install_path` TEXT NOT NULL, `art_url` TEXT NOT NULL, `purchased_date` TEXT NOT NULL, `product_json` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `entitlement_id` TEXT NOT NULL DEFAULT '', `title` TEXT NOT NULL, `is_installed` INTEGER NOT NULL, `install_path` TEXT NOT NULL, `art_url` TEXT NOT NULL, `hero_url` TEXT NOT NULL DEFAULT '', `purchased_date` TEXT NOT NULL, `developer` TEXT NOT NULL DEFAULT '', `publisher` TEXT NOT NULL DEFAULT '', `release_date` TEXT NOT NULL DEFAULT '', `download_size` INTEGER NOT NULL DEFAULT 0, `install_size` INTEGER NOT NULL DEFAULT 0, `version_id` TEXT NOT NULL DEFAULT '', `product_sku` TEXT NOT NULL DEFAULT '', `last_played` INTEGER NOT NULL DEFAULT 0, `play_time_minutes` INTEGER NOT NULL DEFAULT 0, `product_json` TEXT NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
             "columnName": "id",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "entitlementId",
+            "columnName": "entitlement_id",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
           },
           {
             "fieldPath": "title",
@@ -1027,10 +1034,80 @@
             "notNull": true
           },
           {
+            "fieldPath": "heroUrl",
+            "columnName": "hero_url",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
             "fieldPath": "purchasedDate",
             "columnName": "purchased_date",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "developer",
+            "columnName": "developer",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "publisher",
+            "columnName": "publisher",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "releaseDate",
+            "columnName": "release_date",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "downloadSize",
+            "columnName": "download_size",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "installSize",
+            "columnName": "install_size",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "versionId",
+            "columnName": "version_id",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "productSku",
+            "columnName": "product_sku",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "lastPlayed",
+            "columnName": "last_played",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "playTimeMinutes",
+            "columnName": "play_time_minutes",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           },
           {
             "fieldPath": "productJson",
@@ -1073,7 +1150,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '48fd0cde503b67fb7ce65dbc1d7b950c')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'de76f94807f1918c0992d05959f705b6')"
     ]
   }
 }
