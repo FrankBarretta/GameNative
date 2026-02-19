@@ -88,6 +88,25 @@ class AmazonService : Service() {
         // ── Install queries ───────────────────────────────────────────────────
 
         /**
+         * Fetch the total download size for a game by retrieving its manifest.
+         * Also caches the result in the DB for future display.
+         *
+         * @return Size in bytes, or null on failure.
+         */
+        suspend fun fetchDownloadSize(productId: String): Long? {
+            val svc = instance ?: return null
+            val game = svc.amazonManager.getGameById(productId) ?: return null
+            if (game.entitlementId.isBlank()) return null
+
+            val token = svc.amazonManager.getBearerToken() ?: return null
+            val size = AmazonApiClient.fetchDownloadSize(game.entitlementId, token) ?: return null
+
+            // Cache in DB so we don't have to re-fetch next time
+            svc.amazonManager.updateDownloadSize(productId, size)
+            return size
+        }
+
+        /**
          * Returns true if the Amazon game with [productId] is marked as installed in the DB.
          */
         fun isGameInstalled(productId: String): Boolean {

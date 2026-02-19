@@ -73,6 +73,12 @@ class AmazonManager @Inject constructor(
         Timber.i("[Amazon] Marked uninstalled: $productId")
     }
 
+    /** Update the cached download size for a game (e.g. after fetching the manifest). */
+    suspend fun updateDownloadSize(productId: String, size: Long) = withContext(Dispatchers.IO) {
+        amazonGameDao.updateDownloadSize(productId, size)
+        Timber.i("[Amazon] Updated download size for $productId: $size bytes")
+    }
+
     /** Get the stored bearer token (needed by AmazonDownloadManager). */
     suspend fun getBearerToken(): String? = withContext(Dispatchers.IO) {
         AmazonAuthManager.getStoredCredentials(context).getOrNull()?.accessToken

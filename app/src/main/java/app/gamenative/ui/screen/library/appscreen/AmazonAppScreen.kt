@@ -223,8 +223,16 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val game = AmazonService.getAmazonGameOf(productId)
-                val downloadSize = if ((game?.downloadSize ?: 0L) > 0L) {
-                    app.gamenative.utils.StorageUtils.formatBinarySize(game!!.downloadSize)
+
+                // Try to get download size: use cached value first, otherwise fetch from manifest
+                var sizeBytes = game?.downloadSize ?: 0L
+                if (sizeBytes <= 0L) {
+                    Timber.tag(TAG).d("Download size not cached, fetching manifest for $productId…")
+                    sizeBytes = AmazonService.fetchDownloadSize(productId) ?: 0L
+                }
+
+                val downloadSize = if (sizeBytes > 0L) {
+                    app.gamenative.utils.StorageUtils.formatBinarySize(sizeBytes)
                 } else {
                     "Unknown"
                 }

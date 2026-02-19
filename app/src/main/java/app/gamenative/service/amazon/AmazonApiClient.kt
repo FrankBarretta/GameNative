@@ -273,4 +273,58 @@ object AmazonApiClient {
         Timber.i("[Amazon] GetGameDownload: versionId=$versionId url=$downloadUrl")
         GameDownloadSpec(downloadUrl = downloadUrl, versionId = versionId)
     }
+
+    // ── Download size pre-fetch ──────────────────────────────────────────────────────────────
+
+    /**
+     * Fetch the total download size (in bytes) for a game by downloading and parsing
+     * its manifest. This contacts the Amazon distribution service, downloads the
+     * manifest.proto, and sums the file sizes.
+     *
+     * @param entitlementId  The UUID from [AmazonGame.entitlementId].
+     * @param bearerToken    The `access_token` from [AmazonAuthManager].
+     * @return Total install size in bytes, or null on failure.
+     */
+    suspend fun fetchDownloadSize(
+        entitlementId: String,
+        bearerToken: String,
+    ): Long? = withContext(Dispatchers.IO) {
+        Timber.tag("Amazon").d("fetchDownloadSize: entitlementId=$entitlementId")
+
+        val spec = fetchGameDownload(entitlementId, bearerToken) ?: run {
+            Timber.tag("Amazon").w("fetchDownloadSize: failed to get download spec")
+            return@withContext null
+        }
+
+        val manifestUrl = appendPath(spec.downloadUrl, "manifest.proto")
+        Timber.tag("Amazon").d("fetchDownloadSize: manifest URL = $manifestUrl")
+
+        val manifestBytes = try {
+            URL(manifestUrl).openStream().use { it.readBytes() }
+        } catch (e: Exception) {
+            Timber.tag("Amazon").e(e, "fetchDownloadSize: failed to fetch manifest.proto")
+            return@withContext null
+        }
+
+        try {
+            val manifest = AmazonManifest.parse(manifestBytes)
+            Timber.tag("Amazon").i("fetchDownloadSize: totalInstallSize = ${manifest.totalInstallSize}")
+            manifest.totalInstallSize
+        } catch (e: Exception) {
+            Timber.tag("Amazon").e(e, "fetchDownloadSize: failed to parse manifest")
+            null
+        }
+    }
+
+    /** Append [segment] to the path portion of [baseUrl], before any query string. */
+    private fun appendPath(baseUrl: String, segment: String): String {
+        val qIdx = baseUrl.indexOf('?')
+        return if (qIdx == -1) {
+            "$baseUrl/$segment"
+        } else {
+            val path = baseUrl.substring(0, qIdx)
+            val query = baseUrl.substring(qIdx)
+            "$path/$segment$query"
+        }
+    }
 }
