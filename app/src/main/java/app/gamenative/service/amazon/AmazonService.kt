@@ -442,6 +442,136 @@ class AmazonService : Service() {
                 }
             }
         }
+
+        // ── Game verification ─────────────────────────────────────────────────
+
+        /**
+         * Result of verifying installed game files against the cached manifest.
+         */
+        data class VerificationResult(
+            val totalFiles: Int,
+            val verifiedOk: Int,
+            val missingFiles: Int,
+            val sizeMismatch: Int,
+            val hashMismatch: Int,
+            val failedFiles: List<String>,
+        ) {
+            val isValid: Boolean get() = failedFiles.isEmpty()
+        }
+
+        /**
+         * Verify installed files for [productId] against the cached manifest.
+         *
+         * Checks:
+         *  1. File existence
+         *  2. File size matches manifest
+         *  3. SHA-256 hash matches manifest (algorithm 0)
+         *
+         * Mirrors Nile's `nile verify {id}` command.
+         *
+         * @return [VerificationResult] with details, or a failure if manifest is missing.
+         */
+        suspend fun verifyGame(context: Context, productId: String): Result<VerificationResult> {
+            val instance = getInstance()
+                ?: return Result.failure(Exception("Amazon service is not running"))
+
+            return withContext(Dispatchers.IO) {
+                try {
+                    val game = instance.amazonManager.getGameById(productId)
+                        ?: return@withContext Result.failure(Exception("Game not found: $productId"))
+
+                    if (!game.isInstalled || game.installPath.isEmpty()) {
+                        return@withContext Result.failure(Exception("Game is not installed"))
+                    }
+
+                    val installDir = File(game.installPath)
+                    if (!installDir.exists()) {
+                        return@withContext Result.failure(Exception("Install directory not found: ${game.installPath}"))
+                    }
+
+                    val manifestFile = File(context.filesDir, "manifests/amazon/$productId.proto")
+                    if (!manifestFile.exists()) {
+                        return@withContext Result.failure(Exception("No cached manifest — reinstall to enable verification"))
+                    }
+
+                    val manifest = AmazonManifest.parse(manifestFile.readBytes())
+                    val files = manifest.allFiles
+
+                    Timber.tag("Amazon").i("Verifying ${files.size} files for $productId at ${game.installPath}")
+
+                    var verifiedOk = 0
+                    var missingFiles = 0
+                    var sizeMismatch = 0
+                    var hashMismatch = 0
+                    val failedFiles = mutableListOf<String>()
+
+                    for (mf in files) {
+                        val file = File(installDir, mf.unixPath)
+
+                        if (!file.exists()) {
+                            missingFiles++
+                            failedFiles.add(mf.unixPath)
+                            Timber.tag("Amazon").d("Verify MISSING: ${mf.unixPath}")
+                            continue
+                        }
+
+                        if (file.length() != mf.size) {
+                            sizeMismatch++
+                            failedFiles.add(mf.unixPath)
+                            Timber.tag("Amazon").d(
+                                "Verify SIZE MISMATCH: ${mf.unixPath} (expected=${mf.size}, actual=${file.length()})"
+                            )
+                            continue
+                        }
+
+                        // SHA-256 check (algorithm 0) — skip if hash not available
+                        if (mf.hashAlgorithm == 0 && mf.hashBytes.isNotEmpty()) {
+                            val digest = java.security.MessageDigest.getInstance("SHA-256")
+                            file.inputStream().buffered().use { input ->
+                                val buf = ByteArray(8192)
+                                var read: Int
+                                while (input.read(buf).also { read = it } != -1) {
+                                    digest.update(buf, 0, read)
+                                }
+                            }
+                            val computed = digest.digest()
+                            if (!computed.contentEquals(mf.hashBytes)) {
+                                hashMismatch++
+                                failedFiles.add(mf.unixPath)
+                                Timber.tag("Amazon").d("Verify HASH MISMATCH: ${mf.unixPath}")
+                                continue
+                            }
+                        }
+
+                        verifiedOk++
+                    }
+
+                    val result = VerificationResult(
+                        totalFiles = files.size,
+                        verifiedOk = verifiedOk,
+                        missingFiles = missingFiles,
+                        sizeMismatch = sizeMismatch,
+                        hashMismatch = hashMismatch,
+                        failedFiles = failedFiles,
+                    )
+
+                    if (result.isValid) {
+                        Timber.tag("Amazon").i("Verification PASSED: ${result.verifiedOk}/${result.totalFiles} files OK")
+                    } else {
+                        Timber.tag("Amazon").w(
+                            "Verification FAILED: ${result.verifiedOk}/${result.totalFiles} OK, " +
+                                "${result.missingFiles} missing, ${result.sizeMismatch} size mismatch, " +
+                                "${result.hashMismatch} hash mismatch"
+                        )
+                    }
+
+                    Result.success(result)
+                } catch (e: Exception) {
+                    Timber.tag("Amazon").e(e, "Verification failed for $productId")
+                    Result.failure(e)
+                }
+            }
+        }
     }
 
     // ── Service lifecycle ─────────────────────────────────────────────────────

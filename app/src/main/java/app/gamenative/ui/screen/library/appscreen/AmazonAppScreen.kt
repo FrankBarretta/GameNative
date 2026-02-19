@@ -449,6 +449,123 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
     override fun getExportFileExtension(): String = ".amazon"
 
     @Composable
+    override fun getSourceSpecificMenuOptions(
+        context: Context,
+        libraryItem: LibraryItem,
+        onEditContainer: () -> Unit,
+        onBack: () -> Unit,
+        onClickPlay: (Boolean) -> Unit,
+        isInstalled: Boolean,
+    ): List<AppMenuOption> {
+        val options = mutableListOf<AppMenuOption>()
+        if (isInstalled) {
+            options.add(getVerifyFilesOption(context, libraryItem))
+        }
+        return options
+    }
+
+    @Composable
+    private fun getVerifyFilesOption(
+        context: Context,
+        libraryItem: LibraryItem,
+    ): AppMenuOption {
+        var showDialog by remember { mutableStateOf(false) }
+        var verifyResult by remember { mutableStateOf<String?>(null) }
+        var isVerifying by remember { mutableStateOf(false) }
+
+        // Confirmation dialog before verifying
+        if (showDialog && !isVerifying && verifyResult == null) {
+            AlertDialog(
+                onDismissRequest = { showDialog = false },
+                title = { Text(stringResource(R.string.amazon_verify_files_title)) },
+                text = { Text(stringResource(R.string.amazon_verify_files_message)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            isVerifying = true
+                            val productId = productIdOf(libraryItem)
+                            CoroutineScope(Dispatchers.IO).launch {
+                                val result = AmazonService.verifyGame(context, productId)
+                                withContext(Dispatchers.Main) {
+                                    isVerifying = false
+                                    verifyResult = if (result.isSuccess) {
+                                        val v = result.getOrNull()!!
+                                        if (v.isValid) {
+                                            context.getString(
+                                                R.string.amazon_verify_success,
+                                                v.verifiedOk,
+                                                v.totalFiles,
+                                            )
+                                        } else {
+                                            context.getString(
+                                                R.string.amazon_verify_failed_detail,
+                                                v.verifiedOk,
+                                                v.totalFiles,
+                                                v.missingFiles,
+                                                v.sizeMismatch,
+                                                v.hashMismatch,
+                                            )
+                                        }
+                                    } else {
+                                        context.getString(
+                                            R.string.amazon_verify_error,
+                                            result.exceptionOrNull()?.message ?: "Unknown error",
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                    ) {
+                        Text(stringResource(R.string.amazon_verify_confirm))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDialog = false }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                },
+            )
+        }
+
+        // Progress dialog while verifying
+        if (isVerifying) {
+            AlertDialog(
+                onDismissRequest = { /* non-dismissable while verifying */ },
+                title = { Text(stringResource(R.string.amazon_verify_files_title)) },
+                text = { Text(stringResource(R.string.amazon_verify_in_progress)) },
+                confirmButton = {},
+            )
+        }
+
+        // Result dialog
+        if (verifyResult != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    verifyResult = null
+                    showDialog = false
+                },
+                title = { Text(stringResource(R.string.amazon_verify_files_title)) },
+                text = { Text(verifyResult!!) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            verifyResult = null
+                            showDialog = false
+                        },
+                    ) {
+                        Text(stringResource(R.string.ok))
+                    }
+                },
+            )
+        }
+
+        return AppMenuOption(
+            optionType = AppOptionMenuType.VerifyFiles,
+            onClick = { showDialog = true },
+        )
+    }
+
+    @Composable
     override fun getResetContainerOption(
         context: Context,
         libraryItem: LibraryItem,

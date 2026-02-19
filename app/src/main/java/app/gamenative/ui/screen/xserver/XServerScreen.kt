@@ -2210,6 +2210,42 @@ private fun getWineStartCommand(
         }
         guestProgramLauncherComponent.workingDir = File(workDir)
 
+        // ── Set FuelPump environment variables (P3-2) ────────────────
+        // Nile reference: nile/utils/launch.py — sets these for Amazon Games SDK / FuelPump DRM.
+        // The CONFIG_PATH maps to C:\ProgramData inside the Wine prefix.
+        val configPath = "C:\\ProgramData"
+        envVars.put("FUEL_DIR", "$configPath\\Amazon Games Services\\Legacy")
+        envVars.put("AMAZON_GAMES_SDK_PATH", "$configPath\\Amazon Games Services\\AmazonGamesSDK")
+
+        // Fetch game metadata for per-game env vars
+        val amazonGame = kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+            app.gamenative.service.amazon.AmazonService.getAmazonGameOf(productId)
+        }
+        if (amazonGame != null) {
+            envVars.put("AMAZON_GAMES_FUEL_ENTITLEMENT_ID", amazonGame.entitlementId)
+            if (amazonGame.productSku.isNotEmpty()) {
+                envVars.put("AMAZON_GAMES_FUEL_PRODUCT_SKU", amazonGame.productSku)
+            }
+            Timber.tag("XServerScreen").i(
+                "FuelPump env: entitlementId=${amazonGame.entitlementId}, sku=${amazonGame.productSku}"
+            )
+        } else {
+            Timber.tag("XServerScreen").w("Could not load AmazonGame for $productId — FuelPump env vars incomplete")
+        }
+        // Display name — Amazon doesn't expose the user's name in our auth flow;
+        // use "Player" as a safe fallback (same as Nile when user info is unavailable).
+        envVars.put("AMAZON_GAMES_FUEL_DISPLAY_NAME", "Player")
+
+        // Create SDK directories in the Wine prefix so games that probe for them don't fail.
+        // The Wine prefix maps C:\ProgramData to <wineprefix>/drive_c/ProgramData.
+        try {
+            val prefixProgramData = File(container.getRootDir(), ".wine/drive_c/ProgramData")
+            File(prefixProgramData, "Amazon Games Services/Legacy").mkdirs()
+            File(prefixProgramData, "Amazon Games Services/AmazonGamesSDK").mkdirs()
+        } catch (e: Exception) {
+            Timber.tag("XServerScreen").w(e, "Failed to create SDK directories (non-fatal)")
+        }
+
         // Build launch command with optional args
         val launchCommand = if (fuelArgs.isNotEmpty()) {
             val argsStr = fuelArgs.joinToString(" ") { arg ->
