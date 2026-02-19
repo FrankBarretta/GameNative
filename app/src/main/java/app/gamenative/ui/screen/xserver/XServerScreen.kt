@@ -2138,29 +2138,91 @@ private fun getWineStartCommand(
             Timber.tag("XServerScreen").e("Cannot launch: Amazon game not installed")
             return "\"explorer.exe\""
         }
-        
-        // Find executable (largest .exe in install path)
-        val exeFile = File(installPath).walk()
-            .filter { it.extension.equals("exe", ignoreCase = true) }
-            .filter { file -> 
-                val name = file.name.lowercase()
-                !name.contains("unins") && !name.contains("setup") && !name.contains("crash")
+
+        // ── Try fuel.json first (Amazon's launch manifest) ──────────────
+        val fuelFile = File(installPath, "fuel.json")
+        var fuelCommand: String? = null
+        var fuelArgs: List<String> = emptyList()
+        var fuelWorkingDir: String? = null
+
+        if (fuelFile.exists()) {
+            try {
+                val json = org.json.JSONObject(fuelFile.readText())
+                val main = json.optJSONObject("Main")
+                if (main != null) {
+                    fuelCommand = main.optString("Command", "").takeIf { it.isNotEmpty() }
+                    fuelWorkingDir = main.optString("WorkingSubdirOverride", "").takeIf { it.isNotEmpty() }
+                    val argsArray = main.optJSONArray("Args")
+                    if (argsArray != null) {
+                        fuelArgs = (0 until argsArray.length()).mapNotNull { argsArray.optString(it) }
+                    }
+                }
+                Timber.tag("XServerScreen").i(
+                    "fuel.json parsed: command=$fuelCommand, args=$fuelArgs, workingDir=$fuelWorkingDir"
+                )
+            } catch (e: Exception) {
+                Timber.tag("XServerScreen").w(e, "Failed to parse fuel.json, falling back to heuristic")
             }
-            .maxByOrNull { it.length() }
-        
-        if (exeFile == null) {
-            Timber.tag("XServerScreen").e("Cannot find executable for Amazon game")
-            return "\"explorer.exe\""
+        } else {
+            Timber.tag("XServerScreen").d("No fuel.json found at ${fuelFile.path}, using heuristic")
         }
-        
-        val relativePath = exeFile.relativeTo(File(installPath)).path.replace("/", "\\")
-        val amazonCommand = "A:\\$relativePath"
-        
-        val executableDir = installPath + "/" + relativePath.substringBeforeLast("\\", "")
-        guestProgramLauncherComponent.workingDir = File(executableDir)
-        
-        Timber.tag("XServerScreen").i("Amazon launch command: \"$amazonCommand\"")
-        return "winhandler.exe \"$amazonCommand\""
+
+        // Resolve executable path (fuel.json command, or fallback to largest .exe heuristic)
+        if (fuelCommand != null) {
+            val exeFile = File(installPath, fuelCommand.replace("\\", "/"))
+            if (!exeFile.exists()) {
+                Timber.tag("XServerScreen").w(
+                    "fuel.json executable not found: ${exeFile.path}, falling back to heuristic"
+                )
+                fuelCommand = null
+            }
+        }
+
+        // If fuel.json didn't provide a valid command, use the heuristic
+        val resolvedRelativePath = if (fuelCommand != null) {
+            fuelCommand.replace("\\", "/")
+        } else {
+            val exeFile = File(installPath).walk()
+                .filter { it.extension.equals("exe", ignoreCase = true) }
+                .filter { file ->
+                    val name = file.name.lowercase()
+                    !name.contains("unins") && !name.contains("setup") && !name.contains("crash")
+                }
+                .maxByOrNull { it.length() }
+
+            if (exeFile == null) {
+                Timber.tag("XServerScreen").e("Cannot find executable for Amazon game")
+                return "\"explorer.exe\""
+            }
+            Timber.tag("XServerScreen").d("Heuristic selected exe: ${exeFile.path}")
+            exeFile.relativeTo(File(installPath)).path
+        }
+
+        val winPath = resolvedRelativePath.replace("/", "\\")
+        val amazonCommand = "A:\\$winPath"
+
+        // Set working directory: fuel.json override, or directory containing the executable
+        val workDir = if (fuelWorkingDir != null) {
+            installPath + "/" + fuelWorkingDir.replace("\\", "/")
+        } else {
+            val exeDir = resolvedRelativePath.substringBeforeLast("/", "")
+            if (exeDir.isNotEmpty()) installPath + "/" + exeDir else installPath
+        }
+        guestProgramLauncherComponent.workingDir = File(workDir)
+
+        // Build launch command with optional args
+        val launchCommand = if (fuelArgs.isNotEmpty()) {
+            val argsStr = fuelArgs.joinToString(" ") { arg ->
+                if (arg.contains(" ")) "\"$arg\"" else arg
+            }
+            Timber.tag("XServerScreen").i("Amazon launch command: \"$amazonCommand\" $argsStr")
+            "winhandler.exe \"$amazonCommand\" $argsStr"
+        } else {
+            Timber.tag("XServerScreen").i("Amazon launch command: \"$amazonCommand\"")
+            "winhandler.exe \"$amazonCommand\""
+        }
+
+        return launchCommand
     } else if (isCustomGame) {
         // For Custom Games, we can launch even without appLaunchInfo
         // Use the executable path from container config. If missing, try to auto-detect
