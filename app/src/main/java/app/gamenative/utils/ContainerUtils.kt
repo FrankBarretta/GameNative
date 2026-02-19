@@ -907,7 +907,12 @@ object ContainerUtils {
             GameSource.CUSTOM_GAME -> {
                 CustomGameScanner.getFolderPathFromAppId(appId)
             }
-            else -> null
+
+            GameSource.AMAZON -> {
+                // Amazon game IDs are alphanumeric strings, not integers
+                val gameId = appId.removePrefix("AMAZON_").substringBefore("(")
+                AmazonService.getInstallPath(gameId)
+            }
         }
 
         if (gameFolderPath != null) {
