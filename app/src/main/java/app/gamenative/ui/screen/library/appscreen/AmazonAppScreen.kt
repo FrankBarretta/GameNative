@@ -218,9 +218,46 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
             return
         }
 
+        // Show install confirmation dialog with size info
+        Timber.tag(TAG).i("Showing install confirmation dialog for: ${libraryItem.appId}")
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val game = AmazonService.getAmazonGameOf(productId)
+                val downloadSize = if ((game?.downloadSize ?: 0L) > 0L) {
+                    app.gamenative.utils.StorageUtils.formatBinarySize(game!!.downloadSize)
+                } else {
+                    "Unknown"
+                }
+                val installDir = AmazonConstants.getGameInstallPath(context, game?.title ?: libraryItem.name)
+                val availableSpace = app.gamenative.utils.StorageUtils.formatBinarySize(
+                    app.gamenative.utils.StorageUtils.getAvailableSpace(installDir)
+                )
+
+                val message = context.getString(
+                    R.string.amazon_install_confirmation_message,
+                    downloadSize,
+                    availableSpace
+                )
+                val state = app.gamenative.ui.component.dialog.state.MessageDialogState(
+                    visible = true,
+                    type = app.gamenative.ui.enums.DialogType.INSTALL_APP,
+                    title = context.getString(R.string.amazon_install_game_title),
+                    message = message,
+                    confirmBtnText = context.getString(R.string.download),
+                    dismissBtnText = context.getString(R.string.cancel)
+                )
+                BaseAppScreen.showInstallDialog(libraryItem.appId, state)
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "Failed to show install dialog for: ${libraryItem.appId}")
+            }
+        }
+    }
+
+    private fun performDownload(context: Context, libraryItem: LibraryItem) {
+        val productId = productIdOf(libraryItem)
         val game = AmazonService.getAmazonGameOf(productId) ?: run {
             Toast.makeText(context, "Game not found — try syncing library", Toast.LENGTH_SHORT).show()
-            Timber.tag(TAG).w("onDownloadInstallClick: game not found for $productId")
+            Timber.tag(TAG).w("performDownload: game not found for $productId")
             return
         }
         val installPath = AmazonConstants.getGameInstallPath(context, game.title)
@@ -394,8 +431,45 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
         onBack: () -> Unit,
     ) {
         val context = LocalContext.current
+        val appId = libraryItem.appId
 
-        // Monitor uninstall dialog state
+        // ── Install confirmation dialog (from BaseAppScreen shared state) ──
+        var installDialogState by remember(appId) {
+            mutableStateOf(BaseAppScreen.getInstallDialogState(appId) ?: app.gamenative.ui.component.dialog.state.MessageDialogState(false))
+        }
+        LaunchedEffect(appId) {
+            snapshotFlow { BaseAppScreen.getInstallDialogState(appId) }
+                .collect { state ->
+                    installDialogState = state ?: app.gamenative.ui.component.dialog.state.MessageDialogState(false)
+                }
+        }
+
+        if (installDialogState.visible) {
+            val onDismissRequest: (() -> Unit) = {
+                BaseAppScreen.hideInstallDialog(appId)
+            }
+            val onConfirmClick: (() -> Unit)? = when (installDialogState.type) {
+                app.gamenative.ui.enums.DialogType.INSTALL_APP -> {
+                    {
+                        BaseAppScreen.hideInstallDialog(appId)
+                        performDownload(context, libraryItem)
+                    }
+                }
+                else -> null
+            }
+            app.gamenative.ui.component.dialog.MessageDialog(
+                visible = installDialogState.visible,
+                onDismissRequest = onDismissRequest,
+                onConfirmClick = onConfirmClick,
+                onDismissClick = onDismissRequest,
+                confirmBtnText = installDialogState.confirmBtnText,
+                dismissBtnText = installDialogState.dismissBtnText,
+                title = installDialogState.title,
+                message = installDialogState.message,
+            )
+        }
+
+        // ── Uninstall confirmation dialog ──
         var showUninstallDialog by remember { mutableStateOf(shouldShowUninstallDialog(libraryItem.appId)) }
         LaunchedEffect(libraryItem.appId) {
             snapshotFlow { shouldShowUninstallDialog(libraryItem.appId) }
