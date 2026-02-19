@@ -2236,14 +2236,36 @@ private fun getWineStartCommand(
         // use "Player" as a safe fallback (same as Nile when user info is unavailable).
         envVars.put("AMAZON_GAMES_FUEL_DISPLAY_NAME", "Player")
 
-        // Create SDK directories in the Wine prefix so games that probe for them don't fail.
-        // The Wine prefix maps C:\ProgramData to <wineprefix>/drive_c/ProgramData.
+        // ── Deploy Amazon Games SDK files to Wine prefix (P3-1) ─────────
+        // Downloads the FuelSDK + AmazonGamesSDK DLLs from Amazon's launcher
+        // channel (once, cached on disk), then copies them into the Wine
+        // prefix at C:\ProgramData\Amazon Games Services\{Legacy,AmazonGamesSDK}.
+        val prefixProgramData = File(container.getRootDir(), ".wine/drive_c/ProgramData")
         try {
-            val prefixProgramData = File(container.getRootDir(), ".wine/drive_c/ProgramData")
             File(prefixProgramData, "Amazon Games Services/Legacy").mkdirs()
             File(prefixProgramData, "Amazon Games Services/AmazonGamesSDK").mkdirs()
+
+            // Ensure SDK files are downloaded (first launch downloads, subsequent are no-op)
+            val sdkToken = kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                app.gamenative.service.amazon.AmazonService.getInstance()
+                    ?.amazonManager?.getBearerToken()
+            }
+            if (sdkToken != null) {
+                val cached = kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                    app.gamenative.service.amazon.AmazonSdkManager.ensureSdkFiles(context, sdkToken)
+                }
+                if (cached) {
+                    val deployed = app.gamenative.service.amazon.AmazonSdkManager
+                        .deploySdkToPrefix(context, prefixProgramData)
+                    Timber.tag("XServerScreen").i("SDK deployed: $deployed file(s) to Wine prefix")
+                } else {
+                    Timber.tag("XServerScreen").w("SDK download failed — game may not authenticate (non-fatal)")
+                }
+            } else {
+                Timber.tag("XServerScreen").w("No Amazon bearer token — SDK files not deployed (non-fatal)")
+            }
         } catch (e: Exception) {
-            Timber.tag("XServerScreen").w(e, "Failed to create SDK directories (non-fatal)")
+            Timber.tag("XServerScreen").w(e, "Failed to deploy SDK files (non-fatal)")
         }
 
         // Build launch command with optional args

@@ -395,8 +395,63 @@ object AmazonApiClient {
         }
     }
 
+    // ── SDK / Launcher channel ──────────────────────────────────────────────────────────────
+
+    /** Amazon Games Launcher channel ID — source for FuelSDK + AmazonGamesSDK DLLs. */
+    private const val LAUNCHER_CHANNEL_ID = "87d38116-4cbf-4af0-a371-a5b498975346"
+
+    /**
+     * Fetches the download spec for the Amazon Games Launcher / SDK channel.
+     *
+     * Mirrors nile's `Library.get_sdk()` — calls
+     * `GET {DISTRIBUTION_URL}/download/channel/{channelId}`.
+     *
+     * The response has the same shape as GetGameDownload (`downloadUrl`, `versionId`).
+     *
+     * @param bearerToken  The `access_token` from [AmazonAuthManager].
+     * @return [GameDownloadSpec] on success, null on failure.
+     */
+    suspend fun fetchSdkDownload(
+        bearerToken: String,
+    ): GameDownloadSpec? = withContext(Dispatchers.IO) {
+        val url = "$DISTRIBUTION_URL/download/channel/$LAUNCHER_CHANNEL_ID"
+        Timber.tag("Amazon").d("fetchSdkDownload: GET $url")
+
+        try {
+            val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            connection.apply {
+                requestMethod = "GET"
+                setRequestProperty("x-amzn-token", bearerToken)
+                setRequestProperty("UserAgent", USER_AGENT)
+                connectTimeout = 15_000
+                readTimeout = 30_000
+            }
+
+            val responseCode = connection.responseCode
+            if (responseCode != java.net.HttpURLConnection.HTTP_OK) {
+                val errorBody = connection.errorStream?.bufferedReader()?.readText() ?: "(no body)"
+                Timber.tag("Amazon").e("fetchSdkDownload: HTTP $responseCode: $errorBody")
+                return@withContext null
+            }
+
+            val responseText = connection.inputStream.bufferedReader().readText()
+            val json = JSONObject(responseText)
+
+            val downloadUrl = json.optString("downloadUrl", "").ifEmpty {
+                Timber.tag("Amazon").e("fetchSdkDownload: missing downloadUrl")
+                return@withContext null
+            }
+            val versionId = json.optString("versionId", "")
+            Timber.tag("Amazon").i("fetchSdkDownload: versionId=$versionId url=${downloadUrl.take(80)}…")
+            GameDownloadSpec(downloadUrl = downloadUrl, versionId = versionId)
+        } catch (e: Exception) {
+            Timber.tag("Amazon").e(e, "fetchSdkDownload failed")
+            null
+        }
+    }
+
     /** Append [segment] to the path portion of [baseUrl], before any query string. */
-    private fun appendPath(baseUrl: String, segment: String): String {
+    internal fun appendPath(baseUrl: String, segment: String): String {
         val qIdx = baseUrl.indexOf('?')
         return if (qIdx == -1) {
             "$baseUrl/$segment"
