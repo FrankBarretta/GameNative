@@ -69,17 +69,29 @@ class AmazonDownloadManager @Inject constructor(
             File(installPath).mkdirs()
             MarkerUtils.addMarker(installPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
 
+            // Helper to cleanup marker on early failure
+            fun cleanupOnFailure() {
+                MarkerUtils.removeMarker(installPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
+            }
+
             // ── 1. Credentials ───────────────────────────────────────────────
             if (game.entitlementId.isBlank()) {
+                cleanupOnFailure()
                 return@withContext Result.failure(Exception("Game '${game.title}' has no entitlement ID — re-sync library first"))
             }
             val bearerToken = amazonManager.getBearerToken()
-                ?: return@withContext Result.failure(Exception("No Amazon credentials stored"))
+            if (bearerToken == null) {
+                cleanupOnFailure()
+                return@withContext Result.failure(Exception("No Amazon credentials stored"))
+            }
 
             // ── 2. Download spec ─────────────────────────────────────────────
             downloadInfo.updateStatusMessage("Fetching download information…")
             val spec = AmazonApiClient.fetchGameDownload(game.entitlementId, bearerToken)
-                ?: return@withContext Result.failure(Exception("Failed to fetch download spec from Amazon"))
+            if (spec == null) {
+                cleanupOnFailure()
+                return@withContext Result.failure(Exception("Failed to fetch download spec from Amazon"))
+            }
 
             Timber.tag(TAG).d("Download spec: url=${spec.downloadUrl}, version=${spec.versionId}")
 
@@ -88,16 +100,21 @@ class AmazonDownloadManager @Inject constructor(
             val manifestUrl = appendPath(spec.downloadUrl, "manifest.proto")
             Timber.tag(TAG).d("Manifest URL: $manifestUrl")
             val manifestBytes = fetchBytes(manifestUrl)
-                ?: return@withContext Result.failure(Exception("Failed to download manifest.proto"))
+            if (manifestBytes == null) {
+                cleanupOnFailure()
+                return@withContext Result.failure(Exception("Failed to download manifest.proto"))
+            }
 
             val manifest = try {
                 AmazonManifest.parse(manifestBytes)
             } catch (e: Exception) {
+                cleanupOnFailure()
                 return@withContext Result.failure(Exception("Failed to parse manifest: ${e.message}", e))
             }
 
             val files = manifest.allFiles
             if (files.isEmpty()) {
+                cleanupOnFailure()
                 return@withContext Result.failure(Exception("Manifest contains no files"))
             }
 
