@@ -279,6 +279,17 @@ class AmazonService : Service() {
 
                     instance.amazonManager.markUninstalled(productId)
 
+                    // Delete cached manifest
+                    try {
+                        val manifestFile = File(context.filesDir, "manifests/amazon/$productId.proto")
+                        if (manifestFile.exists()) {
+                            manifestFile.delete()
+                            Timber.tag("Amazon").d("Deleted cached manifest for $productId")
+                        }
+                    } catch (e: Exception) {
+                        Timber.tag("Amazon").w(e, "Failed to delete cached manifest (non-fatal)")
+                    }
+
                     withContext(Dispatchers.Main) {
                         ContainerUtils.deleteContainer(context, "AMAZON_$productId")
                     }

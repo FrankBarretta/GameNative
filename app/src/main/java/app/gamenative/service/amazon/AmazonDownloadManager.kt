@@ -147,7 +147,18 @@ class AmazonDownloadManager @Inject constructor(
                 downloadInfo.emitProgressChange()
             }
 
-            // ── 6. Persist installed state ───────────────────────────────────
+            // ── 6. Cache manifest ────────────────────────────────────────
+            try {
+                val manifestDir = File(context.filesDir, "manifests/amazon")
+                manifestDir.mkdirs()
+                val manifestFile = File(manifestDir, "$productId.proto")
+                manifestFile.writeBytes(manifestBytes)
+                Timber.tag(TAG).i("Cached manifest: ${manifestFile.absolutePath} (${manifestBytes.size} bytes)")
+            } catch (e: Exception) {
+                Timber.tag(TAG).w(e, "Failed to cache manifest (non-fatal)")
+            }
+
+            // ── 7. Persist installed state ───────────────────────────────────
             Timber.tag(TAG).i("Persisting install: productId=$productId, version=${spec.versionId}")
             amazonManager.markInstalled(productId, installPath, manifest.totalInstallSize, spec.versionId)
 
