@@ -76,6 +76,6 @@ data class LibraryItem(
         get() {
             val idPart = appId.removePrefix("${gameSource.name}_")
             return idPart.toIntOrNull()
-                ?: if (gameSource == GameSource.AMAZON) idPart.hashCode() else 0
+                ?: if (gameSource == GameSource.AMAZON) (idPart.hashCode() and 0x7FFFFFFF) else 0
         }
 }
