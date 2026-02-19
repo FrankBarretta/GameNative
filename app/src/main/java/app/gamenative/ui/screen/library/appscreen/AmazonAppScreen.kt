@@ -138,6 +138,15 @@ class AmazonAppScreen : BaseAppScreen() {
                     "releaseDate=${game?.releaseDate}, artUrl=${game?.artUrl?.take(60)}, " +
                     "heroUrl=${game?.heroUrl?.take(60)}, downloadSize=${game?.downloadSize}"
             )
+            // Proactively fetch size from manifest if not yet cached
+            val g = game
+            if (g != null && (g.downloadSize <= 0L) && !g.isInstalled) {
+                val size = AmazonService.fetchDownloadSize(productId)
+                if (size != null && size > 0L) {
+                    // Re-read from DB to pick up the cached size
+                    game = AmazonService.getAmazonGameOf(productId)
+                }
+            }
         }
 
         val g = game
