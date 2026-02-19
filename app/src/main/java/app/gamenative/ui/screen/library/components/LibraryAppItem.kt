@@ -353,7 +353,7 @@ internal fun AppItem(
                                 GameSource.GOG -> GOGService.isGameInstalled(appInfo.gameId.toString())
                                 GameSource.EPIC -> EpicService.isGameInstalled(appInfo.gameId)
                                 GameSource.CUSTOM_GAME -> true
-                                GameSource.AMAZON -> AmazonService.isGameInstalled(appInfo.appId.removePrefix("AMAZON_"))
+                                GameSource.AMAZON -> AmazonService.isGameInstalledByAppId(appInfo.gameId)
                             }
                         }
 
@@ -366,7 +366,7 @@ internal fun AppItem(
                                     GameSource.GOG -> GOGService.isGameInstalled(appInfo.gameId.toString())
                                     GameSource.EPIC -> EpicService.isGameInstalled(appInfo.gameId)
                                     GameSource.CUSTOM_GAME -> true
-                                    GameSource.AMAZON -> AmazonService.isGameInstalled(appInfo.appId.removePrefix("AMAZON_"))
+                                    GameSource.AMAZON -> AmazonService.isGameInstalledByAppId(appInfo.gameId)
                                 }
                             }
                         }

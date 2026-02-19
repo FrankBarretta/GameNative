@@ -484,7 +484,7 @@ class LibraryViewModel @Inject constructor(
                 LibraryEntry(
                     item = LibraryItem(
                         index = 0,
-                        appId = "AMAZON_${game.id}",
+                        appId = "AMAZON_${game.appId}",
                         name = game.title,
                         iconHash = game.artUrl,
                         isShared = false,

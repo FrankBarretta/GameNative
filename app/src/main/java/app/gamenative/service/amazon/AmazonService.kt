@@ -53,7 +53,12 @@ class AmazonService : Service() {
     private val activeDownloads = ConcurrentHashMap<String, DownloadInfo>()
 
     // In-memory cache for install status + path — avoids runBlocking for fast UI lookups
+    // Keyed by productId (the Amazon product UUID string)
     private val installInfoCache = ConcurrentHashMap<String, CachedInstallInfo>()
+
+    // Reverse lookup: appId (auto-generated Int) → productId (Amazon UUID string)
+    // Populated during syncLibrary for ContainerUtils lookups
+    private val appIdToProductId = ConcurrentHashMap<Int, String>()
 
     private data class CachedInstallInfo(
         val isInstalled: Boolean,
@@ -216,6 +221,15 @@ class AmazonService : Service() {
             return instance?.installInfoCache?.get(productId)?.isInstalled ?: false
         }
 
+        /**
+         * Returns true if the Amazon game with [appId] is marked as installed.
+         * Performs reverse lookup: appId → productId → installInfoCache.
+         */
+        fun isGameInstalledByAppId(appId: Int): Boolean {
+            val productId = instance?.appIdToProductId?.get(appId) ?: return false
+            return isGameInstalled(productId)
+        }
+
         // ── Playtime tracking ─────────────────────────────────────────────────
 
         /**
@@ -226,6 +240,15 @@ class AmazonService : Service() {
             activeGameProductId = productId
             gameSessionStartMs = System.currentTimeMillis()
             Timber.tag("Amazon").i("Game session started for $productId")
+        }
+
+        /**
+         * Mark the start of a game session by [appId].
+         * Converts appId to productId via reverse lookup.
+         */
+        fun startGameSessionByAppId(appId: Int) {
+            val productId = instance?.appIdToProductId?.get(appId) ?: return
+            startGameSession(productId)
         }
 
         /**
@@ -281,6 +304,24 @@ class AmazonService : Service() {
             return if (info.isInstalled && info.installPath.isNotEmpty()) info.installPath else null
         }
 
+        /**
+         * Returns the on-disk install path for [appId], or null if not installed.
+         * Used by ContainerUtils when the container ID contains the integer appId.
+         * Performs reverse lookup: appId → productId → installPath.
+         */
+        fun getInstallPathByAppId(appId: Int): String? {
+            val productId = instance?.appIdToProductId?.get(appId) ?: return null
+            return getInstallPath(productId)
+        }
+
+        /**
+         * Converts an appId (auto-generated Int) to its productId (Amazon UUID string).
+         * Returns null if the game is not in the cache.
+         */
+        fun getProductIdByAppId(appId: Int): String? {
+            return instance?.appIdToProductId?.get(appId)
+        }
+
         /** Deprecated name kept for call-site compatibility — delegates to [getInstallPath]. */
         fun getInstalledGamePath(gameId: String): String? = getInstallPath(gameId)
 
@@ -303,6 +344,29 @@ class AmazonService : Service() {
         /** Returns the active [DownloadInfo] for [productId], or null if not downloading. */
         fun getDownloadInfo(productId: String): DownloadInfo? =
             getInstance()?.activeDownloads?.get(productId)
+
+        /** Returns the active [DownloadInfo] for [appId], or null if not downloading. */
+        fun getDownloadInfoByAppId(appId: Int): DownloadInfo? {
+            val productId = instance?.appIdToProductId?.get(appId) ?: return null
+            return getDownloadInfo(productId)
+        }
+
+        /**
+         * Cancel an in-progress download by [appId].
+         * @return true if a download was found and cancelled.
+         */
+        fun cancelDownloadByAppId(appId: Int): Boolean {
+            val productId = instance?.appIdToProductId?.get(appId) ?: return false
+            return cancelDownload(productId)
+        }
+
+        /**
+         * Checks whether an installed Amazon game (by appId) has a newer version available.
+         */
+        suspend fun isUpdatePendingByAppId(appId: Int): Boolean {
+            val productId = instance?.appIdToProductId?.get(appId) ?: return false
+            return isUpdatePending(productId)
+        }
 
         /** Returns true if there is at least one active download. */
         fun hasActiveDownload(): Boolean =
@@ -333,14 +397,14 @@ class AmazonService : Service() {
 
             val downloadInfo = DownloadInfo(
                 jobCount = 1,
-                gameId = productId.hashCode(),
+                gameId = game.appId,
                 downloadingAppIds = CopyOnWriteArrayList(),
             )
             downloadInfo.setActive(true)
             instance.activeDownloads[productId] = downloadInfo
 
             PluviaApp.events.emitJava(
-                AndroidEvent.DownloadStatusChanged(productId.hashCode(), true)
+                AndroidEvent.DownloadStatusChanged(game.appId, true)
             )
 
             val job = instance.serviceScope.launch {
@@ -367,7 +431,7 @@ class AmazonService : Service() {
                             ).show()
                         }
                         PluviaApp.events.emitJava(
-                            AndroidEvent.LibraryInstallStatusChanged(productId.hashCode())
+                            AndroidEvent.LibraryInstallStatusChanged(game.appId)
                         )
                     } else {
                         val error = result.exceptionOrNull()
@@ -386,7 +450,7 @@ class AmazonService : Service() {
                 } finally {
                     instance.activeDownloads.remove(productId)
                     PluviaApp.events.emitJava(
-                        AndroidEvent.DownloadStatusChanged(productId.hashCode(), false)
+                        AndroidEvent.DownloadStatusChanged(game.appId, false)
                     )
                 }
             }
@@ -513,11 +577,11 @@ class AmazonService : Service() {
                     }
 
                     withContext(Dispatchers.Main) {
-                        ContainerUtils.deleteContainer(context, "AMAZON_$productId")
+                        ContainerUtils.deleteContainer(context, "AMAZON_${game.appId}")
                     }
 
                     PluviaApp.events.emitJava(
-                        AndroidEvent.LibraryInstallStatusChanged(productId.hashCode())
+                        AndroidEvent.LibraryInstallStatusChanged(game.appId)
                     )
 
                     Timber.tag("Amazon").i("Game uninstalled: $productId")
@@ -753,16 +817,21 @@ class AmazonService : Service() {
      * Populate the in-memory install info cache from the DB.
      * Called after library sync so that [isGameInstalled] and [getInstallPath]
      * can answer without blocking.
+     *
+     * Also populates [appIdToProductId] for reverse lookups from ContainerUtils.
      */
     private suspend fun refreshInstallInfoCache() {
         val games = withContext(Dispatchers.IO) {
             amazonManager.getAllGames()
         }
         for (game in games) {
-            installInfoCache[game.id] = CachedInstallInfo(
+            // Populate install info cache (keyed by productId)
+            installInfoCache[game.productId] = CachedInstallInfo(
                 isInstalled = game.isInstalled,
                 installPath = game.installPath,
             )
+            // Populate reverse lookup: appId → productId
+            appIdToProductId[game.appId] = game.productId
         }
         Timber.d("[Amazon] Install info cache refreshed: ${games.size} entries")
     }

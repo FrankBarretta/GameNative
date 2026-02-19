@@ -63,9 +63,13 @@ class AmazonAppScreen : BaseAppScreen() {
         fun shouldShowUninstallDialog(appId: String): Boolean =
             uninstallDialogAppIds.contains(appId)
 
-        /** Extract the raw Amazon product ID from a library item's appId. */
-        fun productIdOf(libraryItem: LibraryItem): String =
-            libraryItem.appId.removePrefix("AMAZON_")
+        /**
+         * Get the raw Amazon product ID from a library item's appId.
+         * The appId contains an integer (auto-generated), which we convert to productId via lookup.
+         * Returns null if the lookup fails.
+         */
+        fun productIdOf(libraryItem: LibraryItem): String? =
+            AmazonService.getProductIdByAppId(libraryItem.gameId)
 
         /** Format a byte count as a user-friendly size string. */
         private fun formatBytes(bytes: Long): String {
@@ -244,17 +248,17 @@ class AmazonAppScreen : BaseAppScreen() {
     }
 
 override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
-        AmazonService.isGameInstalled(productIdOf(libraryItem))
+        AmazonService.isGameInstalledByAppId(libraryItem.gameId)
 
     override fun isValidToDownload(context: Context, libraryItem: LibraryItem): Boolean =
         !isInstalled(context, libraryItem) &&
-            AmazonService.getDownloadInfo(productIdOf(libraryItem)) == null
+            AmazonService.getDownloadInfoByAppId(libraryItem.gameId) == null
 
     override fun isDownloading(context: Context, libraryItem: LibraryItem): Boolean =
-        AmazonService.getDownloadInfo(productIdOf(libraryItem)) != null
+        AmazonService.getDownloadInfoByAppId(libraryItem.gameId) != null
 
     override fun getDownloadProgress(context: Context, libraryItem: LibraryItem): Float =
-        AmazonService.getDownloadInfo(productIdOf(libraryItem))?.getProgress() ?: 0f
+        AmazonService.getDownloadInfoByAppId(libraryItem.gameId)?.getProgress() ?: 0f
 
     override fun hasPartialDownload(context: Context, libraryItem: LibraryItem): Boolean = false
 
@@ -348,10 +352,10 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
     }
 
     override fun onPauseResumeClick(context: Context, libraryItem: LibraryItem) {
-        val productId = productIdOf(libraryItem)
-        if (AmazonService.getDownloadInfo(productId) != null) {
-            Timber.tag(TAG).i("Cancelling download for $productId")
-            AmazonService.cancelDownload(productId)
+        val appId = libraryItem.gameId
+        if (AmazonService.getDownloadInfoByAppId(appId) != null) {
+            Timber.tag(TAG).i("Cancelling download for appId=$appId")
+            AmazonService.cancelDownloadByAppId(appId)
         } else {
             // Resume — re-start the download
             onDownloadInstallClick(context, libraryItem) {}
@@ -393,12 +397,11 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
     }
 
     override suspend fun isUpdatePendingSuspend(context: Context, libraryItem: LibraryItem): Boolean {
-        val productId = productIdOf(libraryItem)
-        return AmazonService.isUpdatePending(productId)
+        return AmazonService.isUpdatePendingByAppId(libraryItem.gameId)
     }
 
     override fun getInstallPath(context: Context, libraryItem: LibraryItem): String? {
-        return AmazonService.getInstallPath(productIdOf(libraryItem))
+        return AmazonService.getInstallPathByAppId(libraryItem.gameId)
     }
 
     override fun observeGameState(

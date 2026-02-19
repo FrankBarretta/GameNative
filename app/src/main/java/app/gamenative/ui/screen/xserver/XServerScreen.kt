@@ -2131,12 +2131,16 @@ private fun getWineStartCommand(
 
         return launchCommand
     } else if (gameSource == GameSource.AMAZON) {
-        // For Amazon games, get install path using the product ID string (not the Int gameId)
-        val productId = appId.removePrefix("AMAZON_").substringBefore("(")
-        Timber.tag("XServerScreen").i("Launching Amazon game: productId=$productId")
-        
-        val amazonService = app.gamenative.service.amazon.AmazonService.getInstance()
-        val installPath = amazonService?.getInstalledGamePath(productId)
+        // For Amazon games, convert appId (integer) to productId (Amazon UUID string)
+        val appIdInt = appId.removePrefix("AMAZON_").substringBefore("(").toIntOrNull()
+        val productId = if (appIdInt != null) {
+            app.gamenative.service.amazon.AmazonService.getProductIdByAppId(appIdInt)
+        } else null
+        Timber.tag("XServerScreen").i("Launching Amazon game: appId=$appIdInt, productId=$productId")
+
+        val installPath = if (appIdInt != null) {
+            app.gamenative.service.amazon.AmazonService.getInstallPathByAppId(appIdInt)
+        } else null
         
         if (installPath.isNullOrEmpty()) {
             Timber.tag("XServerScreen").e("Cannot launch: Amazon game not installed")
@@ -2222,9 +2226,11 @@ private fun getWineStartCommand(
         envVars.put("AMAZON_GAMES_SDK_PATH", "$configPath\\Amazon Games Services\\AmazonGamesSDK")
 
         // Fetch game metadata for per-game env vars
-        val amazonGame = kotlinx.coroutines.runBlocking(Dispatchers.IO) {
-            app.gamenative.service.amazon.AmazonService.getAmazonGameOf(productId)
-        }
+        val amazonGame = if (productId != null) {
+            kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                app.gamenative.service.amazon.AmazonService.getAmazonGameOf(productId)
+            }
+        } else null
         if (amazonGame != null) {
             envVars.put("AMAZON_GAMES_FUEL_ENTITLEMENT_ID", amazonGame.entitlementId)
             if (amazonGame.productSku.isNotEmpty()) {
@@ -2234,7 +2240,7 @@ private fun getWineStartCommand(
                 "FuelPump env: entitlementId=${amazonGame.entitlementId}, sku=${amazonGame.productSku}"
             )
         } else {
-            Timber.tag("XServerScreen").w("Could not load AmazonGame for $productId — FuelPump env vars incomplete")
+            Timber.tag("XServerScreen").w("Could not load AmazonGame for appId=$appIdInt — FuelPump env vars incomplete")
         }
         // Display name — Amazon doesn't expose the user's name in our auth flow;
         // use "Player" as a safe fallback (same as Nile when user info is unavailable).

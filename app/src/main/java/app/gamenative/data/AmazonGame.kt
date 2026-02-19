@@ -7,13 +7,25 @@ import androidx.room.PrimaryKey
 /**
  * Amazon Game entity for Room database.
  * Represents an entitlement returned by the Amazon Gaming Distribution service.
+ *
+ * Follows the Epic pattern:
+ * - [appId]: Auto-generated Int primary key for internal use (events, intents, container IDs)
+ * - [productId]: Amazon's actual product UUID for API calls
  */
 @Entity(tableName = "amazon_games")
 data class AmazonGame(
-    /** Amazon product ID (e.g. "amzn1.adg.product.XXXX") */
-    @PrimaryKey
-    @ColumnInfo("id")
-    val id: String,
+    /**
+     * Auto-generated integer primary key for internal GameNative use.
+     * Used for events, intents, container IDs, etc.
+     * For Amazon API calls, use [productId] instead.
+     */
+    @PrimaryKey(autoGenerate = true)
+    @ColumnInfo("app_id")
+    val appId: Int = 0,
+
+    /** Amazon product ID (e.g. "amzn1.adg.product.XXXX") - used for API calls */
+    @ColumnInfo("product_id")
+    val productId: String,
 
     /**
      * Top-level entitlement UUID from the GetEntitlements response

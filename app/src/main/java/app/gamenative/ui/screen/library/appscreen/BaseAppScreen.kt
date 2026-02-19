@@ -637,8 +637,7 @@ abstract class BaseAppScreen {
             app.gamenative.data.GameSource.GOG -> app.gamenative.service.gog.GOGService.getDownloadInfo(displayInfo.gameId.toString())
             app.gamenative.data.GameSource.CUSTOM_GAME -> null // Custom games don't support downloads yet
             app.gamenative.data.GameSource.AMAZON -> {
-                val productId = libraryItem.appId.removePrefix("AMAZON_")
-                app.gamenative.service.amazon.AmazonService.getDownloadInfo(productId)
+                app.gamenative.service.amazon.AmazonService.getDownloadInfoByAppId(displayInfo.gameId)
             }
         }
 
