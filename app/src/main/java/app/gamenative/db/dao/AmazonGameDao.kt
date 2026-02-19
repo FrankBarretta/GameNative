@@ -78,38 +78,35 @@ interface AmazonGameDao {
      * Used when refreshing the library from the Amazon API — we don't want to
      * wipe locally-tracked installation info just because the API response
      * doesn't include it.
+     *
+     * Optimized to avoid N+1 queries by fetching all existing games in one batch.
      */
     @Transaction
     suspend fun upsertPreservingInstallStatus(games: List<AmazonGame>) {
-        val existingIds = getAllIds().toSet()
-        val toInsert = mutableListOf<AmazonGame>()
-        val toUpdate = mutableListOf<AmazonGame>()
+        // Batch fetch all existing games in one query (avoids N+1)
+        val gameIds = games.map { it.id }
+        val existingGames = getGamesByIds(gameIds)
+        val existingMap = existingGames.associateBy { it.id }
 
-        for (game in games) {
-            if (game.id in existingIds) {
-                val existing = getById(game.id)
-                if (existing != null) {
-                    // Preserve install-related fields and playtime from DB
-                    toUpdate.add(
-                        game.copy(
-                            isInstalled = existing.isInstalled,
-                            installPath = existing.installPath,
-                            installSize = existing.installSize,
-                            versionId = existing.versionId,
-                            productSku = if (game.productSku.isNotEmpty()) game.productSku else existing.productSku,
-                            lastPlayed = existing.lastPlayed,
-                            playTimeMinutes = existing.playTimeMinutes,
-                        )
-                    )
-                } else {
-                    toInsert.add(game)
-                }
+        val toInsert = games.map { newGame ->
+            val existing = existingMap[newGame.id]
+            if (existing != null) {
+                // Preserve install-related fields and playtime from DB
+                newGame.copy(
+                    isInstalled = existing.isInstalled,
+                    installPath = existing.installPath,
+                    installSize = existing.installSize,
+                    versionId = existing.versionId,
+                    productSku = if (newGame.productSku.isNotEmpty()) newGame.productSku else existing.productSku,
+                    lastPlayed = existing.lastPlayed,
+                    playTimeMinutes = existing.playTimeMinutes,
+                )
             } else {
-                toInsert.add(game)
+                newGame
             }
         }
 
-        if (toInsert.isNotEmpty()) insertAll(toInsert)
-        for (game in toUpdate) update(game)
+        // InsertAll with REPLACE strategy handles both insert and update
+        insertAll(toInsert)
     }
 }
