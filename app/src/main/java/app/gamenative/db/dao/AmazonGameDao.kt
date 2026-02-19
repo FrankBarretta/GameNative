@@ -86,6 +86,7 @@ interface AmazonGameDao {
                             installPath = existing.installPath,
                             installSize = existing.installSize,
                             versionId = existing.versionId,
+                            productSku = if (game.productSku.isNotEmpty()) game.productSku else existing.productSku,
                         )
                     )
                 } else {

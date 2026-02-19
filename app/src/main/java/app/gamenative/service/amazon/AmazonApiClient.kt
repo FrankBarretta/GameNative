@@ -179,6 +179,7 @@ object AmazonApiClient {
 
         val artUrl = resolveArtUrl(productDetail, details)
         val heroUrl = resolveHeroUrl(details)
+        val productSku = product.optString("sku", "")
 
         return AmazonGame(
             id = id,
@@ -191,6 +192,7 @@ object AmazonApiClient {
             publisher = publisher,
             releaseDate = releaseDate,
             downloadSize = downloadSize,
+            productSku = productSku,
             productJson = product.toString(),
         )
     }

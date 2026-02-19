@@ -20,6 +20,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -67,6 +68,22 @@ class AmazonService : Service() {
         // Sync tracking variables
         private var lastSyncTimestamp: Long = 0L
         private var hasPerformedInitialSync: Boolean = false
+        private var syncInProgress: Boolean = false
+        private var backgroundSyncJob: Job? = null
+
+        private fun setSyncInProgress(inProgress: Boolean) {
+            syncInProgress = inProgress
+        }
+
+        fun isSyncInProgress(): Boolean = syncInProgress
+
+        /**
+         * Returns true if the service has ongoing work (sync or downloads).
+         * Used to guard against premature service stop.
+         */
+        fun hasActiveOperations(): Boolean {
+            return syncInProgress || backgroundSyncJob?.isActive == true || hasActiveDownload()
+        }
 
         val isRunning: Boolean
             get() = instance != null
@@ -310,6 +327,11 @@ class AmazonService : Service() {
 
         /**
          * Delete installed files for [productId] and mark it as uninstalled in the DB.
+         *
+         * Uses the cached manifest (if available) to delete only the files that were
+         * originally installed, then removes empty directories bottom-up. Falls back to
+         * [File.deleteRecursively] when no manifest is cached (mirrors Nile's
+         * `utils/uninstall.py` behaviour).
          */
         suspend fun deleteGame(context: Context, productId: String): Result<Unit> {
             val instance = getInstance()
@@ -322,8 +344,65 @@ class AmazonService : Service() {
 
                     val path = game.installPath
                     if (path.isNotEmpty() && File(path).exists()) {
-                        Timber.tag("Amazon").i("Deleting install dir: $path")
-                        File(path).deleteRecursively()
+                        val installDir = File(path)
+                        val manifestFile = File(context.filesDir, "manifests/amazon/$productId.proto")
+
+                        if (manifestFile.exists()) {
+                            // ── Manifest-based uninstall ─────────────────────────
+                            Timber.tag("Amazon").i("Manifest-based uninstall for $productId")
+                            try {
+                                val manifest = AmazonManifest.parse(manifestFile.readBytes())
+                                var deletedFiles = 0
+                                var failedFiles = 0
+
+                                for (mf in manifest.allFiles) {
+                                    val file = File(installDir, mf.unixPath)
+                                    if (file.exists()) {
+                                        if (file.delete()) {
+                                            deletedFiles++
+                                        } else {
+                                            failedFiles++
+                                            Timber.tag("Amazon").w("Failed to delete: ${file.absolutePath}")
+                                        }
+                                    }
+                                }
+
+                                // Walk directories bottom-up and remove empty ones
+                                val dirs = mutableSetOf<File>()
+                                for (mf in manifest.allFiles) {
+                                    var parent = File(installDir, mf.unixPath).parentFile
+                                    while (parent != null && parent != installDir && parent.startsWith(installDir)) {
+                                        dirs.add(parent)
+                                        parent = parent.parentFile
+                                    }
+                                }
+                                // Sort deepest-first so child dirs are removed before parents
+                                for (dir in dirs.sortedByDescending { it.absolutePath.length }) {
+                                    if (dir.exists() && dir.isDirectory && (dir.listFiles()?.isEmpty() == true)) {
+                                        dir.delete()
+                                    }
+                                }
+
+                                // Remove the install dir itself if it's now empty
+                                if (installDir.exists() && installDir.isDirectory &&
+                                    (installDir.listFiles()?.isEmpty() == true)
+                                ) {
+                                    installDir.delete()
+                                }
+
+                                Timber.tag("Amazon").i(
+                                    "Manifest-based uninstall complete: $deletedFiles deleted, $failedFiles failed"
+                                )
+                            } catch (e: Exception) {
+                                Timber.tag("Amazon").w(e, "Manifest parse failed — falling back to recursive delete")
+                                installDir.deleteRecursively()
+                            }
+                        } else {
+                            // ── Fallback: recursive delete ───────────────────────
+                            Timber.tag("Amazon").i("No cached manifest — recursive delete: $path")
+                            installDir.deleteRecursively()
+                        }
+
                         MarkerUtils.removeMarker(path, Marker.DOWNLOAD_COMPLETE_MARKER)
                         MarkerUtils.removeMarker(path, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
                     }
@@ -367,9 +446,12 @@ class AmazonService : Service() {
 
     // ── Service lifecycle ─────────────────────────────────────────────────────
 
+    private val onEndProcess: (AndroidEvent.EndProcess) -> Unit = { stop() }
+
     override fun onCreate() {
         super.onCreate()
         instance = this
+        PluviaApp.events.on<AndroidEvent.EndProcess, Unit>(onEndProcess)
         Timber.i("[Amazon] Service created")
     }
 
@@ -404,15 +486,20 @@ class AmazonService : Service() {
         }
 
         if (shouldSync) {
-            serviceScope.launch { syncLibrary() }
+            backgroundSyncJob = serviceScope.launch { syncLibrary() }
         }
 
         return START_STICKY
     }
 
     override fun onDestroy() {
-        instance = null
+        PluviaApp.events.off<AndroidEvent.EndProcess, Unit>(onEndProcess)
+        backgroundSyncJob?.cancel()
+        setSyncInProgress(false)
         serviceScope.cancel()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        notificationHelper.cancel()
+        instance = null
         super.onDestroy()
         Timber.i("[Amazon] Service destroyed")
     }
@@ -425,6 +512,7 @@ class AmazonService : Service() {
     fun getInstalledGamePath(gameId: String): String? = getInstallPath(gameId)
 
     private suspend fun syncLibrary() {
+        setSyncInProgress(true)
         try {
             amazonManager.refreshLibrary()
             refreshInstallInfoCache()
@@ -433,6 +521,8 @@ class AmazonService : Service() {
             Timber.i("[Amazon] Sync complete — next auto-sync in 15 minutes")
         } catch (e: Exception) {
             Timber.e(e, "[Amazon] Library sync failed")
+        } finally {
+            setSyncInProgress(false)
         }
     }
 

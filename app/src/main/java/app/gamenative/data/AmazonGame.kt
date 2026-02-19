@@ -69,6 +69,10 @@ data class AmazonGame(
     @ColumnInfo(name = "version_id", defaultValue = "")
     val versionId: String = "",
 
+    /** Product SKU from entitlement response — used for FuelPump environment variables. */
+    @ColumnInfo(name = "product_sku", defaultValue = "")
+    val productSku: String = "",
+
     /** Raw product JSON kept for manifest lookup, etc. */
     @ColumnInfo("product_json")
     val productJson: String = "",
