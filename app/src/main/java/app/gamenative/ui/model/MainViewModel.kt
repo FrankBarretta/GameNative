@@ -336,7 +336,11 @@ class MainViewModel @Inject constructor(
                 // Record playtime for Amazon games
                 Timber.tag("Amazon").i("Amazon Game exited for $appId — recording playtime")
                 viewModelScope.launch(Dispatchers.IO) {
-                    app.gamenative.service.amazon.AmazonService.recordSessionPlaytime()
+                    try {
+                        app.gamenative.service.amazon.AmazonService.recordSessionPlaytime()
+                    } catch (e: Exception) {
+                        Timber.tag("Amazon").e(e, "Error recording Amazon playtime for $appId")
+                    }
                 }
             } else {
                 // For Steam games, sync cloud saves
