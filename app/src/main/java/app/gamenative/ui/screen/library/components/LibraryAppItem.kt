@@ -71,6 +71,7 @@ import app.gamenative.service.amazon.AmazonService
 import app.gamenative.service.epic.EpicService
 import app.gamenative.service.gog.GOGService
 import app.gamenative.ui.enums.PaneType
+import app.gamenative.ui.icons.Amazon
 import app.gamenative.ui.icons.Steam
 import app.gamenative.ui.internal.fakeAppInfo
 import app.gamenative.ui.theme.PluviaTheme
@@ -654,7 +655,7 @@ fun GameSourceIcon(gameSource: GameSource, modifier: Modifier = Modifier, iconSi
         GameSource.CUSTOM_GAME -> Icon(imageVector = Icons.Filled.Folder, contentDescription = "Custom Game", modifier = modifier.size(iconSize.dp).alpha(0.7f))
         GameSource.GOG -> Icon(painter = painterResource(R.drawable.ic_gog), contentDescription = "Gog", modifier = modifier.size(iconSize.dp).alpha(0.7f))
         GameSource.EPIC -> Icon(painter = painterResource(R.drawable.ic_epic), contentDescription = "Epic", modifier = modifier.size(iconSize.dp).alpha(0.7f))
-        GameSource.AMAZON -> Icon(imageVector = Icons.Filled.Folder, contentDescription = "Amazon", modifier = modifier.size(iconSize.dp).alpha(0.7f))
+        GameSource.AMAZON -> Icon(imageVector = Icons.Filled.Amazon, contentDescription = "Amazon", modifier = modifier.size(iconSize.dp).alpha(0.7f))
     }
 }
 

@@ -32,6 +32,7 @@ import app.gamenative.data.GameSource
 import app.gamenative.ui.component.FlowFilterChip
 import app.gamenative.ui.enums.AppFilter
 import app.gamenative.ui.enums.PaneType
+import app.gamenative.ui.icons.Amazon
 import app.gamenative.ui.icons.CustomGame
 import app.gamenative.ui.icons.Steam
 import app.gamenative.ui.theme.PluviaTheme
@@ -141,7 +142,7 @@ fun LibraryBottomSheet(
                 selected = showAmazon,
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Filled.Folder,
+                        imageVector = Icons.Filled.Amazon,
                         contentDescription = "Amazon",
                         modifier = Modifier.size(24.dp)
                     )
