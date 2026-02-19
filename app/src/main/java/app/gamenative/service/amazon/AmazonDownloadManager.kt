@@ -220,8 +220,16 @@ class AmazonDownloadManager @Inject constructor(
         installDir: File,
         downloadInfo: DownloadInfo,
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        val destFile = File(installDir, file.unixPath)
-        val tmpFile = File(installDir, "${file.unixPath}.tmp")
+        val destFile = File(installDir, file.unixPath).canonicalFile
+        val tmpFile = File(installDir, "${file.unixPath}.tmp").canonicalFile
+        val installDirCanonical = installDir.canonicalPath
+
+        // Security check: prevent path traversal attacks
+        if (!destFile.path.startsWith(installDirCanonical) || !tmpFile.path.startsWith(installDirCanonical)) {
+            Timber.tag(TAG).e("Path traversal attempt blocked: ${file.unixPath}")
+            return@withContext Result.failure(SecurityException("Invalid file path"))
+        }
+
         try {
             // Skip already-complete files (resume-friendly)
             if (destFile.exists() && destFile.length() == file.size) {
