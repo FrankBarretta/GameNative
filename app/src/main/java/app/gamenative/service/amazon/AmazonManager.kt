@@ -57,7 +57,7 @@ class AmazonManager @Inject constructor(
      * Returns null if not found.
      */
     suspend fun getGameById(productId: String): AmazonGame? = withContext(Dispatchers.IO) {
-        amazonGameDao.getById(productId)
+        amazonGameDao.getByProductId(productId)
     }
 
     /** Return all Amazon games from the DB (for cache population). */

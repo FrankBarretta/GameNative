@@ -68,8 +68,8 @@ class AmazonAppScreen : BaseAppScreen() {
          * The appId contains an integer (auto-generated), which we convert to productId via lookup.
          * Returns null if the lookup fails.
          */
-        fun productIdOf(libraryItem: LibraryItem): String? =
-            AmazonService.getProductIdByAppId(libraryItem.gameId)
+        fun productIdOf(libraryItem: LibraryItem): String =
+            AmazonService.getProductIdByAppId(libraryItem.gameId) ?: ""
 
         /** Format a byte count as a user-friendly size string. */
         private fun formatBytes(bytes: Long): String {

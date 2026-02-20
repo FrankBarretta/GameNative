@@ -62,7 +62,7 @@ class AmazonDownloadManager @Inject constructor(
         installPath: String,
         downloadInfo: DownloadInfo,
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        val productId = game.id
+        val productId = game.productId
         try {
             Timber.tag(TAG).i("Starting download for ${game.title} → $installPath")
 
