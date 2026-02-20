@@ -17,8 +17,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Login
-import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -551,7 +551,7 @@ fun SettingsGroupInterface(
     SettingsGroup(title = { Text(text = stringResource(R.string.gog_integration_title)) }) {
         if (!app.gamenative.service.gog.GOGAuthManager.hasStoredCredentials(context)) {
             SettingsMenuLink(
-                icon = { androidx.compose.material3.Icon(Icons.Default.Login, contentDescription = null) },
+                icon = { androidx.compose.material3.Icon(Icons.AutoMirrored.Filled.Login, contentDescription = null) },
                 colors = settingsTileColorsAlt(),
                 title = { Text(text = stringResource(R.string.gog_settings_login_title)) },
                 subtitle = { Text(text = stringResource(R.string.gog_settings_login_subtitle)) },
@@ -563,7 +563,7 @@ fun SettingsGroupInterface(
         // Logout button - only show if credentials exist
         if (app.gamenative.service.gog.GOGAuthManager.hasStoredCredentials(context)) {
             SettingsMenuLink(
-                icon = { androidx.compose.material3.Icon(Icons.Default.Logout, contentDescription = null) },
+                icon = { androidx.compose.material3.Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null) },
                 colors = settingsTileColorsAlt(),
                 title = { Text(text = stringResource(R.string.gog_settings_logout_title)) },
                 subtitle = { Text(text = stringResource(R.string.gog_settings_logout_subtitle)) },
@@ -578,7 +578,7 @@ fun SettingsGroupInterface(
     SettingsGroup(title = { Text(text = stringResource(R.string.epic_integration_title)) }) {
         if(!EpicAuthManager.hasStoredCredentials(context)) {
             SettingsMenuLink(
-                icon = { androidx.compose.material3.Icon(Icons.Default.Login, contentDescription = null) },
+                icon = { androidx.compose.material3.Icon(Icons.AutoMirrored.Filled.Login, contentDescription = null) },
                 colors = settingsTileColorsAlt(),
                 title = { Text(text = stringResource(R.string.epic_settings_login_title)) },
                 subtitle = { Text(text = stringResource(R.string.epic_settings_login_subtitle)) },
@@ -590,7 +590,7 @@ fun SettingsGroupInterface(
             // Epic Logout Button
         if (EpicAuthManager.hasStoredCredentials(context)) {
             SettingsMenuLink(
-                icon = { androidx.compose.material3.Icon(Icons.Default.Logout, contentDescription = null) },
+                icon = { androidx.compose.material3.Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null) },
                 title = { Text(text = stringResource(R.string.epic_settings_logout_title)) },
                 subtitle = { Text(text = stringResource(R.string.epic_settings_logout_subtitle)) },
                 onClick = {
@@ -609,7 +609,7 @@ fun SettingsGroupInterface(
     SettingsGroup(title = { Text(text = stringResource(R.string.amazon_integration_title)) }) {
         if (!AmazonAuthManager.hasStoredCredentials(context)) {
             SettingsMenuLink(
-                icon = { androidx.compose.material3.Icon(Icons.Default.Login, contentDescription = null) },
+                icon = { androidx.compose.material3.Icon(Icons.AutoMirrored.Filled.Login, contentDescription = null) },
                 colors = settingsTileColorsAlt(),
                 title = { Text(text = stringResource(R.string.amazon_settings_login_title)) },
                 subtitle = { Text(text = stringResource(R.string.amazon_settings_login_subtitle)) },
@@ -621,7 +621,7 @@ fun SettingsGroupInterface(
         // Amazon Logout Button
         if (AmazonAuthManager.hasStoredCredentials(context)) {
             SettingsMenuLink(
-                icon = { androidx.compose.material3.Icon(Icons.Default.Logout, contentDescription = null) },
+                icon = { androidx.compose.material3.Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null) },
                 title = { Text(text = stringResource(R.string.amazon_settings_logout_title)) },
                 subtitle = { Text(text = stringResource(R.string.amazon_settings_logout_subtitle)) },
                 onClick = {
