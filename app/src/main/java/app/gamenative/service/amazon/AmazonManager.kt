@@ -60,6 +60,14 @@ class AmazonManager @Inject constructor(
         amazonGameDao.getByProductId(productId)
     }
 
+    /**
+     * Look up a single [AmazonGame] by its auto-generated Int primary key ([AmazonGame.appId]).
+     * Returns null if not found.
+     */
+    suspend fun getGameByAppId(appId: Int): AmazonGame? = withContext(Dispatchers.IO) {
+        amazonGameDao.getByAppId(appId)
+    }
+
     /** Return all Amazon games from the DB (for cache population). */
     suspend fun getAllGames(): List<AmazonGame> = withContext(Dispatchers.IO) {
         amazonGameDao.getAllAsList()

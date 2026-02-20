@@ -30,25 +30,12 @@ class AmazonOAuthActivity : ComponentActivity() {
     companion object {
         const val EXTRA_AUTH_CODE = "auth_code"
         const val EXTRA_ERROR = "error"
-        private const val SAVED_AUTH_URL = "auth_url"
-    }
-
-    private var initialAuthUrl: String? = null
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        initialAuthUrl?.let { outState.putString(SAVED_AUTH_URL, it) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val authUrl = if (savedInstanceState != null) {
-            savedInstanceState.getString(SAVED_AUTH_URL) ?: AmazonAuthManager.startAuthFlow()
-        } else {
-            AmazonAuthManager.startAuthFlow()
-        }
-        initialAuthUrl = authUrl
+        val authUrl = AmazonAuthManager.startAuthFlow()
 
         setContent {
             PluviaTheme {

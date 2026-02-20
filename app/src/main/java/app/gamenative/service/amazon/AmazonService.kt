@@ -537,7 +537,7 @@ class AmazonService : Service() {
                                 val dirs = mutableSetOf<File>()
                                 for (mf in manifest.allFiles) {
                                     var parent = File(installDir, mf.unixPath).parentFile
-                                    while (parent != null && parent != installDir && parent.startsWith(installDir)) {
+                                    while (parent != null && parent != installDir && parent.toPath().startsWith(installDir.toPath())) {
                                         dirs.add(parent)
                                         parent = parent.parentFile
                                     }

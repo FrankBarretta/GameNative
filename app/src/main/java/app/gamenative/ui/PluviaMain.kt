@@ -227,7 +227,7 @@ fun PluviaMain(
                                         }
 
                                         GameSource.AMAZON -> {
-                                            app.gamenative.service.amazon.AmazonService.isGameInstalled(gameId.toString())
+                                            app.gamenative.service.amazon.AmazonService.isGameInstalledByAppId(gameId)
                                         }
 
                                         GameSource.CUSTOM_GAME -> {
