@@ -67,15 +67,15 @@ data class LibraryItem(
 
     /**
      * Helper property to get the game ID as an integer.
-     * For Steam/Epic/GOG/Custom: extract the numeric part after the prefix.
-     * For Amazon: product IDs are UUID strings (e.g. "amzn1.adg.product.xxx")
-     * that cannot be parsed as Int, so we use hashCode() for a stable Int representation.
-     * This matches the hashCode() used in AmazonService event emission.
+     * Extracts the numeric part after the source prefix (e.g., "STEAM_123" → 123).
+     *
+     * All game sources now use integer IDs:
+     * - Steam/Epic/GOG/Custom: numeric IDs from their respective platforms
+     * - Amazon: auto-generated Int primary key (following Epic pattern)
      */
     val gameId: Int
         get() {
             val idPart = appId.removePrefix("${gameSource.name}_")
-            return idPart.toIntOrNull()
-                ?: if (gameSource == GameSource.AMAZON) idPart.hashCode() else 0
+            return idPart.toIntOrNull() ?: 0
         }
 }

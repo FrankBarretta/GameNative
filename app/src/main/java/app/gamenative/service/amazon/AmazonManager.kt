@@ -57,7 +57,7 @@ class AmazonManager @Inject constructor(
      * Returns null if not found.
      */
     suspend fun getGameById(productId: String): AmazonGame? = withContext(Dispatchers.IO) {
-        amazonGameDao.getById(productId)
+        amazonGameDao.getByProductId(productId)
     }
 
     /** Return all Amazon games from the DB (for cache population). */
@@ -93,5 +93,11 @@ class AmazonManager @Inject constructor(
     /** Get the stored bearer token (needed by AmazonDownloadManager). */
     suspend fun getBearerToken(): String? = withContext(Dispatchers.IO) {
         AmazonAuthManager.getStoredCredentials(context).getOrNull()?.accessToken
+    }
+
+    /** Delete all non-installed Amazon games from DB on logout. */
+    suspend fun deleteAllNonInstalledGames() = withContext(Dispatchers.IO) {
+        amazonGameDao.deleteAllNonInstalledGames()
+        Timber.i("[Amazon] Deleted all non-installed games from DB")
     }
 }

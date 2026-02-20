@@ -1,12 +1,14 @@
 package app.gamenative.service.amazon
 
 import app.gamenative.data.AmazonGame
+import app.gamenative.utils.Net
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import timber.log.Timber
-import java.io.OutputStreamWriter
-import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
@@ -68,7 +70,7 @@ object AmazonApiClient {
         Timber.i("[Amazon] Fetching entitlements (hardwareHash=${hardwareHash.take(8)}…)")
 
         do {
-            val requestBody = buildRequestBody(nextToken, hardwareHash)
+            val requestBody = buildGetEntitlementsRequestBody(nextToken, hardwareHash)
             val responseJson = postJson(
                 url = ENTITLEMENTS_URL,
                 target = GET_ENTITLEMENTS_TARGET,
@@ -82,7 +84,7 @@ object AmazonApiClient {
                     val entitlement = entitlementsArray.getJSONObject(i)
                     val game = parseEntitlement(entitlement) ?: continue
                     // Deduplicate by product id (nile does the same)
-                    games[game.id] = game
+                    games[game.productId] = game
                 }
                 Timber.d("[Amazon] Page returned ${entitlementsArray.length()} entitlements, total so far: ${games.size}")
             }
@@ -101,7 +103,7 @@ object AmazonApiClient {
 
     // ── Private helpers ──────────────────────────────────────────────────────
 
-    private fun buildRequestBody(nextToken: String?, hardwareHash: String): JSONObject =
+    private fun buildGetEntitlementsRequestBody(nextToken: String?, hardwareHash: String): JSONObject =
         JSONObject().apply {
             put("Operation", "GetEntitlements")
             put("clientId", "Sonic")
@@ -113,6 +115,8 @@ object AmazonApiClient {
             put("hardwareHash", hardwareHash)
         }
 
+    private val JSON_MEDIA_TYPE = "application/json".toMediaType()
+
     private fun postJson(
         url: String,
         target: String,
@@ -120,33 +124,28 @@ object AmazonApiClient {
         body: JSONObject,
     ): JSONObject? {
         return try {
-            val connection = URL(url).openConnection() as HttpURLConnection
-            connection.apply {
-                requestMethod = "POST"
-                setRequestProperty("X-Amz-Target", target)
-                setRequestProperty("x-amzn-token", bearerToken)
-                setRequestProperty("UserAgent", USER_AGENT)
-                setRequestProperty("Content-Type", "application/json")
-                setRequestProperty("Content-Encoding", "amz-1.0")
-                doOutput = true
-                connectTimeout = 15_000
-                readTimeout = 30_000
-            }
+            val requestBody = body.toString().toRequestBody(JSON_MEDIA_TYPE)
 
-            OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { writer ->
-                writer.write(body.toString())
-                writer.flush()
-            }
+            val request = Request.Builder()
+                .url(url)
+                .post(requestBody)
+                .header("X-Amz-Target", target)
+                .header("x-amzn-token", bearerToken)
+                .header("User-Agent", USER_AGENT)
+                .header("Content-Type", "application/json")
+                .header("Content-Encoding", "amz-1.0")
+                .build()
 
-            val responseCode = connection.responseCode
-            if (responseCode != HttpURLConnection.HTTP_OK) {
-                val errorBody = connection.errorStream?.bufferedReader()?.readText() ?: "(no body)"
-                Timber.e("[Amazon] HTTP $responseCode from $url (target=${target.substringAfterLast('.')}): $errorBody")
-                return null
-            }
+            Net.http.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val errorBody = response.body?.string() ?: "(no body)"
+                    Timber.e("[Amazon] HTTP ${response.code} from $url (target=${target.substringAfterLast('.')}): $errorBody")
+                    return null
+                }
 
-            val responseText = connection.inputStream.bufferedReader().readText()
-            JSONObject(responseText)
+                val responseText = response.body?.string() ?: return null
+                JSONObject(responseText)
+            }
         } catch (e: Exception) {
             Timber.e(e, "[Amazon] POST to $url failed")
             null
@@ -159,7 +158,7 @@ object AmazonApiClient {
      */
     private fun parseEntitlement(entitlement: JSONObject): AmazonGame? {
         val product = entitlement.optJSONObject("product") ?: return null
-        val id = product.optString("id", "").ifEmpty { return null }
+        val productId = product.optString("id", "").ifEmpty { return null }
         val title = product.optString("title", "")
         val purchasedDate = entitlement.optString("purchasedDate", "")
 
@@ -182,7 +181,8 @@ object AmazonApiClient {
         val productSku = product.optString("sku", "")
 
         return AmazonGame(
-            id = id,
+            // appId = 0 (auto-generated by Room when inserting)
+            productId = productId,
             entitlementId = entitlementId,
             title = title,
             artUrl = artUrl,
@@ -379,9 +379,25 @@ object AmazonApiClient {
         Timber.tag("Amazon").d("fetchDownloadSize: manifest URL = $manifestUrl")
 
         val manifestBytes = try {
-            URL(manifestUrl).openStream().use { it.readBytes() }
+            val request = Request.Builder()
+                .url(manifestUrl)
+                .get()
+                .build()
+
+            Net.http.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Timber.tag("Amazon").e("fetchDownloadSize: HTTP ${response.code} fetching manifest")
+                    return@withContext null
+                }
+                response.body?.bytes()
+            }
         } catch (e: Exception) {
             Timber.tag("Amazon").e(e, "fetchDownloadSize: failed to fetch manifest.proto")
+            return@withContext null
+        }
+
+        if (manifestBytes == null) {
+            Timber.tag("Amazon").e("fetchDownloadSize: empty manifest response")
             return@withContext null
         }
 
@@ -397,9 +413,6 @@ object AmazonApiClient {
 
     // ── SDK / Launcher channel ──────────────────────────────────────────────────────────────
 
-    /** Amazon Games Launcher channel ID — source for FuelSDK + AmazonGamesSDK DLLs. */
-    private const val LAUNCHER_CHANNEL_ID = "87d38116-4cbf-4af0-a371-a5b498975346"
-
     /**
      * Fetches the download spec for the Amazon Games Launcher / SDK channel.
      *
@@ -414,36 +427,35 @@ object AmazonApiClient {
     suspend fun fetchSdkDownload(
         bearerToken: String,
     ): GameDownloadSpec? = withContext(Dispatchers.IO) {
-        val url = "$DISTRIBUTION_URL/download/channel/$LAUNCHER_CHANNEL_ID"
+        val url = "$DISTRIBUTION_URL/download/channel/${AmazonConstants.LAUNCHER_CHANNEL_ID}"
         Timber.tag("Amazon").d("fetchSdkDownload: GET $url")
 
         try {
-            val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            connection.apply {
-                requestMethod = "GET"
-                setRequestProperty("x-amzn-token", bearerToken)
-                setRequestProperty("UserAgent", USER_AGENT)
-                connectTimeout = 15_000
-                readTimeout = 30_000
-            }
+            val request = Request.Builder()
+                .url(url)
+                .get()
+                .header("x-amzn-token", bearerToken)
+                .header("User-Agent", USER_AGENT)
+                .build()
 
-            val responseCode = connection.responseCode
-            if (responseCode != java.net.HttpURLConnection.HTTP_OK) {
-                val errorBody = connection.errorStream?.bufferedReader()?.readText() ?: "(no body)"
-                Timber.tag("Amazon").e("fetchSdkDownload: HTTP $responseCode: $errorBody")
-                return@withContext null
-            }
+            Net.http.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val errorBody = response.body?.string() ?: "(no body)"
+                    Timber.tag("Amazon").e("fetchSdkDownload: HTTP ${response.code}: $errorBody")
+                    return@withContext null
+                }
 
-            val responseText = connection.inputStream.bufferedReader().readText()
-            val json = JSONObject(responseText)
+                val responseText = response.body?.string() ?: return@withContext null
+                val json = JSONObject(responseText)
 
-            val downloadUrl = json.optString("downloadUrl", "").ifEmpty {
-                Timber.tag("Amazon").e("fetchSdkDownload: missing downloadUrl")
-                return@withContext null
+                val downloadUrl = json.optString("downloadUrl", "").ifEmpty {
+                    Timber.tag("Amazon").e("fetchSdkDownload: missing downloadUrl")
+                    return@withContext null
+                }
+                val versionId = json.optString("versionId", "")
+                Timber.tag("Amazon").i("fetchSdkDownload: versionId=$versionId url=${downloadUrl.take(80)}…")
+                GameDownloadSpec(downloadUrl = downloadUrl, versionId = versionId)
             }
-            val versionId = json.optString("versionId", "")
-            Timber.tag("Amazon").i("fetchSdkDownload: versionId=$versionId url=${downloadUrl.take(80)}…")
-            GameDownloadSpec(downloadUrl = downloadUrl, versionId = versionId)
         } catch (e: Exception) {
             Timber.tag("Amazon").e(e, "fetchSdkDownload failed")
             null

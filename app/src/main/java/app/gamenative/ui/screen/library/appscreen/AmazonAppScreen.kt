@@ -8,23 +8,34 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import app.gamenative.PluviaApp
 import app.gamenative.R
 import app.gamenative.data.AmazonGame
 import app.gamenative.data.LibraryItem
+import app.gamenative.events.AndroidEvent
 import app.gamenative.service.amazon.AmazonConstants
 import app.gamenative.service.amazon.AmazonService
+import app.gamenative.ui.component.dialog.AmazonInstallDialog
+import app.gamenative.ui.component.dialog.MessageDialog
+import app.gamenative.ui.component.dialog.state.MessageDialogState
 import app.gamenative.ui.data.AppMenuOption
 import app.gamenative.ui.data.GameDisplayInfo
 import app.gamenative.ui.enums.AppOptionMenuType
+import app.gamenative.ui.enums.DialogType
+import app.gamenative.enums.Marker
 import app.gamenative.utils.ContainerUtils
+import app.gamenative.utils.MarkerUtils
 import com.winlator.container.ContainerData
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -48,6 +59,27 @@ class AmazonAppScreen : BaseAppScreen() {
         // Shared state for uninstall dialog — list of appIds that should show the dialog
         private val uninstallDialogAppIds = mutableStateListOf<String>()
 
+        /** Data needed to render the full-screen install confirmation dialog. */
+        data class AmazonInstallDialogData(
+            val downloadSize: String,
+            val installSize: String,
+            val availableSpace: String,
+            val installEnabled: Boolean,
+        )
+
+        private val installDialogDataMap = mutableStateMapOf<String, AmazonInstallDialogData>()
+
+        fun showAmazonInstallDialog(appId: String, data: AmazonInstallDialogData) {
+            installDialogDataMap[appId] = data
+        }
+
+        fun hideAmazonInstallDialog(appId: String) {
+            installDialogDataMap.remove(appId)
+        }
+
+        fun getAmazonInstallDialogData(appId: String): AmazonInstallDialogData? =
+            installDialogDataMap[appId]
+
         fun showUninstallDialog(appId: String) {
             Timber.tag(TAG).d("showUninstallDialog: appId=$appId")
             if (!uninstallDialogAppIds.contains(appId)) {
@@ -63,9 +95,13 @@ class AmazonAppScreen : BaseAppScreen() {
         fun shouldShowUninstallDialog(appId: String): Boolean =
             uninstallDialogAppIds.contains(appId)
 
-        /** Extract the raw Amazon product ID from a library item's appId. */
+        /**
+         * Get the raw Amazon product ID from a library item's appId.
+         * The appId contains an integer (auto-generated), which we convert to productId via lookup.
+         * Returns null if the lookup fails.
+         */
         fun productIdOf(libraryItem: LibraryItem): String =
-            libraryItem.appId.removePrefix("AMAZON_")
+            AmazonService.getProductIdByAppId(libraryItem.gameId) ?: ""
 
         /** Format a byte count as a user-friendly size string. */
         private fun formatBytes(bytes: Long): String {
@@ -244,19 +280,23 @@ class AmazonAppScreen : BaseAppScreen() {
     }
 
 override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
-        AmazonService.isGameInstalled(productIdOf(libraryItem))
+        AmazonService.isGameInstalledByAppId(libraryItem.gameId)
 
     override fun isValidToDownload(context: Context, libraryItem: LibraryItem): Boolean =
         !isInstalled(context, libraryItem) &&
-            AmazonService.getDownloadInfo(productIdOf(libraryItem)) == null
+            AmazonService.getDownloadInfoByAppId(libraryItem.gameId) == null
 
     override fun isDownloading(context: Context, libraryItem: LibraryItem): Boolean =
-        AmazonService.getDownloadInfo(productIdOf(libraryItem)) != null
+        AmazonService.getDownloadInfoByAppId(libraryItem.gameId) != null
 
     override fun getDownloadProgress(context: Context, libraryItem: LibraryItem): Float =
-        AmazonService.getDownloadInfo(productIdOf(libraryItem))?.getProgress() ?: 0f
+        AmazonService.getDownloadInfoByAppId(libraryItem.gameId)?.getProgress() ?: 0f
 
-    override fun hasPartialDownload(context: Context, libraryItem: LibraryItem): Boolean = false
+    override fun hasPartialDownload(context: Context, libraryItem: LibraryItem): Boolean {
+        if (isInstalled(context, libraryItem)) return false
+        val path = AmazonConstants.getGameInstallPath(context, libraryItem.name)
+        return File(path).exists() && !MarkerUtils.hasMarker(path, Marker.DOWNLOAD_COMPLETE_MARKER)
+    }
 
     override fun onDownloadInstallClick(
         context: Context,
@@ -274,51 +314,55 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
             return
         }
 
+        if (hasPartialDownload(context, libraryItem)) {
+            // Resume directly — no confirmation dialog needed (mirrors Steam/Epic behaviour)
+            Timber.tag(TAG).i("Resuming partial download for: ${libraryItem.appId}")
+            performDownload(context, libraryItem)
+            return
+        }
+
         if (installed) {
             Timber.tag(TAG).i("Game already installed, launching: $productId")
             onClickPlay(false)
             return
         }
 
-        // Show install confirmation dialog with size info
-        Timber.tag(TAG).i("Showing install confirmation dialog for: ${libraryItem.appId}")
+        // Show full-screen install confirmation (matches Steam GameManagerDialog style)
+        Timber.tag(TAG).i("Showing install confirmation for: ${libraryItem.appId}")
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val game = AmazonService.getAmazonGameOf(productId)
 
-                // Try to get download size: use cached value first, otherwise fetch from manifest
-                var sizeBytes = game?.downloadSize ?: 0L
-                if (sizeBytes <= 0L) {
+                // Resolve download size — use cached value first, fall back to manifest fetch
+                var downloadBytes = game?.downloadSize ?: 0L
+                if (downloadBytes <= 0L) {
                     Timber.tag(TAG).d("Download size not cached, fetching manifest for $productId…")
-                    sizeBytes = AmazonService.fetchDownloadSize(productId) ?: 0L
+                    downloadBytes = AmazonService.fetchDownloadSize(productId) ?: 0L
                 }
+                val installBytes = game?.installSize ?: 0L
 
-                val downloadSize = if (sizeBytes > 0L) {
-                    app.gamenative.utils.StorageUtils.formatBinarySize(sizeBytes)
-                } else {
-                    "Unknown"
-                }
+                val downloadSize = if (downloadBytes > 0L)
+                    app.gamenative.utils.StorageUtils.formatBinarySize(downloadBytes)
+                else "Unknown"
+                val installSize = if (installBytes > 0L)
+                    app.gamenative.utils.StorageUtils.formatBinarySize(installBytes)
+                else "Unknown"
+
                 val installDir = AmazonConstants.getGameInstallPath(context, game?.title ?: libraryItem.name)
-                val availableSpace = app.gamenative.utils.StorageUtils.formatBinarySize(
-                    app.gamenative.utils.StorageUtils.getAvailableSpace(installDir)
-                )
+                val availableBytes = app.gamenative.utils.StorageUtils.getAvailableSpace(AmazonConstants.defaultAmazonGamesPath(context))
+                val availableSpace = app.gamenative.utils.StorageUtils.formatBinarySize(availableBytes)
 
-                val message = context.getString(
-                    R.string.amazon_install_confirmation_message,
-                    downloadSize,
-                    availableSpace
+                showAmazonInstallDialog(
+                    libraryItem.appId,
+                    AmazonInstallDialogData(
+                        downloadSize = downloadSize,
+                        installSize = installSize,
+                        availableSpace = availableSpace,
+                        installEnabled = availableBytes >= installBytes || installBytes <= 0L,
+                    ),
                 )
-                val state = app.gamenative.ui.component.dialog.state.MessageDialogState(
-                    visible = true,
-                    type = app.gamenative.ui.enums.DialogType.INSTALL_APP,
-                    title = context.getString(R.string.amazon_install_game_title),
-                    message = message,
-                    confirmBtnText = context.getString(R.string.download),
-                    dismissBtnText = context.getString(R.string.cancel)
-                )
-                BaseAppScreen.showInstallDialog(libraryItem.appId, state)
             } catch (e: Exception) {
-                Timber.tag(TAG).e(e, "Failed to show install dialog for: ${libraryItem.appId}")
+                Timber.tag(TAG).e(e, "Failed to show install confirmation for: ${libraryItem.appId}")
             }
         }
     }
@@ -348,13 +392,13 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
     }
 
     override fun onPauseResumeClick(context: Context, libraryItem: LibraryItem) {
-        val productId = productIdOf(libraryItem)
-        if (AmazonService.getDownloadInfo(productId) != null) {
-            Timber.tag(TAG).i("Cancelling download for $productId")
-            AmazonService.cancelDownload(productId)
+        val appId = libraryItem.gameId
+        if (AmazonService.getDownloadInfoByAppId(appId) != null) {
+            Timber.tag(TAG).i("Cancelling download for appId=$appId")
+            AmazonService.cancelDownloadByAppId(appId)
         } else {
-            // Resume — re-start the download
-            onDownloadInstallClick(context, libraryItem) {}
+            // Resume paused/cancelled download directly — no confirmation dialog
+            performDownload(context, libraryItem)
         }
     }
 
@@ -362,11 +406,18 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
         val productId = productIdOf(libraryItem)
         Timber.tag(TAG).i("onDeleteDownloadClick: productId=$productId")
 
-        if (isDownloading(context, libraryItem)) {
-            // Cancel active download
-            Timber.tag(TAG).i("Cancelling active download for $productId")
-            AmazonService.cancelDownload(productId)
-            Toast.makeText(context, "Download cancelled", Toast.LENGTH_SHORT).show()
+        if (isDownloading(context, libraryItem) || hasPartialDownload(context, libraryItem)) {
+            showInstallDialog(
+                libraryItem.appId,
+                MessageDialogState(
+                    visible = true,
+                    type = DialogType.CANCEL_APP_DOWNLOAD,
+                    title = context.getString(R.string.cancel_download_prompt_title),
+                    message = context.getString(R.string.epic_delete_download_message),
+                    confirmBtnText = context.getString(R.string.yes),
+                    dismissBtnText = context.getString(R.string.no),
+                )
+            )
         } else if (isInstalled(context, libraryItem)) {
             // Show uninstall confirmation dialog (debounces multi-tap)
             Timber.tag(TAG).i("Showing uninstall dialog for: ${libraryItem.appId}")
@@ -393,12 +444,11 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
     }
 
     override suspend fun isUpdatePendingSuspend(context: Context, libraryItem: LibraryItem): Boolean {
-        val productId = productIdOf(libraryItem)
-        return AmazonService.isUpdatePending(productId)
+        return AmazonService.isUpdatePendingByAppId(libraryItem.gameId)
     }
 
     override fun getInstallPath(context: Context, libraryItem: LibraryItem): String? {
-        return AmazonService.getInstallPath(productIdOf(libraryItem))
+        return AmazonService.getInstallPathByAppId(libraryItem.gameId)
     }
 
     override fun observeGameState(
@@ -459,7 +509,9 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
                         AmazonService.getDownloadInfo(productId)?.removeProgressListener(listener)
                         currentProgressListener = null
                     }
-                    onHasPartialDownloadChanged?.invoke(false)
+                    // If not installed after download stopped → paused/cancelled: show Resume state
+                    val nowInstalled = AmazonService.isGameInstalledByAppId(gameId)
+                    onHasPartialDownloadChanged?.invoke(!nowInstalled && hasPartialDownload(context, libraryItem))
                 }
                 onStateChanged()
             }
@@ -630,41 +682,79 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
         onBack: () -> Unit,
     ) {
         val context = LocalContext.current
+        val scope = rememberCoroutineScope()
         val appId = libraryItem.appId
+        val productId = productIdOf(libraryItem)
 
-        // ── Install confirmation dialog (from BaseAppScreen shared state) ──
+        // ── Cancel-download / delete-partial confirmation dialog ──
         var installDialogState by remember(appId) {
-            mutableStateOf(BaseAppScreen.getInstallDialogState(appId) ?: app.gamenative.ui.component.dialog.state.MessageDialogState(false))
+            mutableStateOf(BaseAppScreen.getInstallDialogState(appId) ?: MessageDialogState(false))
         }
         LaunchedEffect(appId) {
             snapshotFlow { BaseAppScreen.getInstallDialogState(appId) }
                 .collect { state ->
-                    installDialogState = state ?: app.gamenative.ui.component.dialog.state.MessageDialogState(false)
+                    installDialogState = state ?: MessageDialogState(false)
                 }
         }
 
         if (installDialogState.visible) {
-            val onDismissRequest: (() -> Unit) = {
-                BaseAppScreen.hideInstallDialog(appId)
-            }
             val onConfirmClick: (() -> Unit)? = when (installDialogState.type) {
-                app.gamenative.ui.enums.DialogType.INSTALL_APP -> {
+                DialogType.CANCEL_APP_DOWNLOAD -> {
                     {
-                        BaseAppScreen.hideInstallDialog(appId)
-                        performDownload(context, libraryItem)
+                        Timber.tag(TAG).i("Confirmed cancel/delete download for: $productId")
+                        val downloadInfo = AmazonService.getDownloadInfo(productId)
+                        downloadInfo?.cancel()
+                        scope.launch {
+                            downloadInfo?.awaitCompletion()
+                            AmazonService.deleteGame(context, productId)
+                            withContext(Dispatchers.Main) {
+                                BaseAppScreen.hideInstallDialog(appId)
+                                PluviaApp.events.emitJava(AndroidEvent.DownloadStatusChanged(libraryItem.appId.removePrefix("AMAZON_").toInt(), false))
+                                PluviaApp.events.emitJava(AndroidEvent.LibraryInstallStatusChanged(libraryItem.appId.removePrefix("AMAZON_").toInt()))
+                            }
+                        }
                     }
                 }
                 else -> null
             }
-            app.gamenative.ui.component.dialog.MessageDialog(
+            MessageDialog(
                 visible = installDialogState.visible,
-                onDismissRequest = onDismissRequest,
+                onDismissRequest = { BaseAppScreen.hideInstallDialog(appId) },
                 onConfirmClick = onConfirmClick,
-                onDismissClick = onDismissRequest,
+                onDismissClick = { BaseAppScreen.hideInstallDialog(appId) },
                 confirmBtnText = installDialogState.confirmBtnText,
                 dismissBtnText = installDialogState.dismissBtnText,
                 title = installDialogState.title,
                 message = installDialogState.message,
+            )
+        }
+
+        // ── Install confirmation (full-screen, matches Steam GameManagerDialog style) ──
+        var amazonInstallData by remember(appId) {
+            mutableStateOf(getAmazonInstallDialogData(appId))
+        }
+        LaunchedEffect(appId) {
+            snapshotFlow { getAmazonInstallDialogData(appId) }
+                .collect { data -> amazonInstallData = data }
+        }
+
+        val currentInstallData = amazonInstallData
+        if (currentInstallData != null) {
+            val displayInfo = getGameDisplayInfo(context, libraryItem)
+            AmazonInstallDialog(
+                visible = true,
+                displayInfo = displayInfo,
+                downloadSize = currentInstallData.downloadSize,
+                installSize = currentInstallData.installSize,
+                availableSpace = currentInstallData.availableSpace,
+                installEnabled = currentInstallData.installEnabled,
+                onInstall = {
+                    hideAmazonInstallDialog(appId)
+                    performDownload(context, libraryItem)
+                },
+                onDismiss = {
+                    hideAmazonInstallDialog(appId)
+                },
             )
         }
 

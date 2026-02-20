@@ -10,6 +10,7 @@ import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -62,24 +63,36 @@ class AmazonDownloadManager @Inject constructor(
         installPath: String,
         downloadInfo: DownloadInfo,
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        val productId = game.id
+        val productId = game.productId
         try {
             Timber.tag(TAG).i("Starting download for ${game.title} → $installPath")
 
             File(installPath).mkdirs()
             MarkerUtils.addMarker(installPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
 
+            // Helper to cleanup marker on early failure
+            fun cleanupOnFailure() {
+                MarkerUtils.removeMarker(installPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
+            }
+
             // ── 1. Credentials ───────────────────────────────────────────────
             if (game.entitlementId.isBlank()) {
+                cleanupOnFailure()
                 return@withContext Result.failure(Exception("Game '${game.title}' has no entitlement ID — re-sync library first"))
             }
             val bearerToken = amazonManager.getBearerToken()
-                ?: return@withContext Result.failure(Exception("No Amazon credentials stored"))
+            if (bearerToken == null) {
+                cleanupOnFailure()
+                return@withContext Result.failure(Exception("No Amazon credentials stored"))
+            }
 
             // ── 2. Download spec ─────────────────────────────────────────────
             downloadInfo.updateStatusMessage("Fetching download information…")
             val spec = AmazonApiClient.fetchGameDownload(game.entitlementId, bearerToken)
-                ?: return@withContext Result.failure(Exception("Failed to fetch download spec from Amazon"))
+            if (spec == null) {
+                cleanupOnFailure()
+                return@withContext Result.failure(Exception("Failed to fetch download spec from Amazon"))
+            }
 
             Timber.tag(TAG).d("Download spec: url=${spec.downloadUrl}, version=${spec.versionId}")
 
@@ -88,16 +101,21 @@ class AmazonDownloadManager @Inject constructor(
             val manifestUrl = appendPath(spec.downloadUrl, "manifest.proto")
             Timber.tag(TAG).d("Manifest URL: $manifestUrl")
             val manifestBytes = fetchBytes(manifestUrl)
-                ?: return@withContext Result.failure(Exception("Failed to download manifest.proto"))
+            if (manifestBytes == null) {
+                cleanupOnFailure()
+                return@withContext Result.failure(Exception("Failed to download manifest.proto"))
+            }
 
             val manifest = try {
                 AmazonManifest.parse(manifestBytes)
             } catch (e: Exception) {
+                cleanupOnFailure()
                 return@withContext Result.failure(Exception("Failed to parse manifest: ${e.message}", e))
             }
 
             val files = manifest.allFiles
             if (files.isEmpty()) {
+                cleanupOnFailure()
                 return@withContext Result.failure(Exception("Manifest contains no files"))
             }
 
@@ -177,6 +195,10 @@ class AmazonDownloadManager @Inject constructor(
             Result.success(Unit)
 
         } catch (e: Exception) {
+            if (e is CancellationException) {
+                downloadInfo.setActive(false)
+                throw e
+            }
             Timber.tag(TAG).e(e, "Download failed for ${game.title}: ${e.message}")
             MarkerUtils.removeMarker(installPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
             downloadInfo.updateStatusMessage("Failed: ${e.message}")
@@ -220,8 +242,16 @@ class AmazonDownloadManager @Inject constructor(
         installDir: File,
         downloadInfo: DownloadInfo,
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        val destFile = File(installDir, file.unixPath)
-        val tmpFile = File(installDir, "${file.unixPath}.tmp")
+        val destFile = File(installDir, file.unixPath).canonicalFile
+        val tmpFile = File(installDir, "${file.unixPath}.tmp").canonicalFile
+        val installDirCanonical = installDir.canonicalPath
+
+        // Security check: prevent path traversal attacks
+        if (!destFile.path.startsWith(installDirCanonical) || !tmpFile.path.startsWith(installDirCanonical)) {
+            Timber.tag(TAG).e("Path traversal attempt blocked: ${file.unixPath}")
+            return@withContext Result.failure(SecurityException("Invalid file path"))
+        }
+
         try {
             // Skip already-complete files (resume-friendly)
             if (destFile.exists() && destFile.length() == file.size) {

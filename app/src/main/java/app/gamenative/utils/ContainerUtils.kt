@@ -638,9 +638,11 @@ object ContainerUtils {
 
             GameSource.AMAZON -> {
                 // For Amazon games, map the specific game directory to A: drive
-                // Amazon game IDs are alphanumeric strings, not integers
-                val gameId = appId.removePrefix("AMAZON_").substringBefore("(")
-                val installPath = AmazonService.getInstance()?.getInstalledGamePath(gameId)
+                // Amazon uses integer appId (auto-generated) in container IDs
+                val appIdInt = appId.removePrefix("AMAZON_").substringBefore("(").toIntOrNull()
+                val installPath = if (appIdInt != null) {
+                    AmazonService.getInstallPathByAppId(appIdInt)
+                } else null
 
                 if (installPath != null && installPath.isNotEmpty()) {
                     val drive: Char = if (defaultDrives.contains("A:")) {
@@ -650,7 +652,7 @@ object ContainerUtils {
                     }
                     "$defaultDrives$drive:$installPath"
                 } else {
-                    Timber.w("Could not find Amazon game install path for: $gameId, using default drives")
+                    Timber.w("Could not find Amazon game install path for appId: $appIdInt, using default drives")
                     defaultDrives
                 }
             }
@@ -907,7 +909,12 @@ object ContainerUtils {
             GameSource.CUSTOM_GAME -> {
                 CustomGameScanner.getFolderPathFromAppId(appId)
             }
-            else -> null
+
+            GameSource.AMAZON -> {
+                // Amazon uses integer appId (auto-generated) in container IDs
+                val appIdInt = appId.removePrefix("AMAZON_").substringBefore("(").toIntOrNull()
+                if (appIdInt != null) AmazonService.getInstallPathByAppId(appIdInt) else null
+            }
         }
 
         if (gameFolderPath != null) {
@@ -1024,15 +1031,7 @@ object ContainerUtils {
         return try {
             lastPart.toInt()
         } catch (e: NumberFormatException) {
-            // Amazon IDs are UUID strings (e.g. "amzn1.adg.product.xxx") — not parseable as Int.
-            // Use hashCode() of the full ID part (after prefix) for a stable Int representation.
-            if (containerId.startsWith("AMAZON_")) {
-                val idPart = idWithoutSuffix.removePrefix("AMAZON_")
-                Timber.d("extractGameIdFromContainerId: Amazon ID '$idPart' → hashCode=${idPart.hashCode()}")
-                idPart.hashCode()
-            } else {
-                throw IllegalArgumentException("Could not extract game ID from container ID: $containerId", e)
-            }
+            throw IllegalArgumentException("Could not extract game ID from container ID: $containerId", e)
         }
     }
 

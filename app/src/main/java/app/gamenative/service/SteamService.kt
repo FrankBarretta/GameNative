@@ -628,7 +628,6 @@ class SteamService : Service(), IChallengeUrlChanged {
             val archOk = when (depot.osArch) {
                 OSArch.Arch64, OSArch.Unknown -> true
                 OSArch.Arch32 -> !has64Bit
-                else -> false
             }
             if (!archOk) return false
             // 4. DLC you actually own

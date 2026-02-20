@@ -18,7 +18,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.VolunteerActivism
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -104,7 +104,7 @@ fun SupportersDialog(
                             )
                         }
 
-                        Divider(modifier = Modifier.padding(vertical = 4.dp))
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
@@ -157,7 +157,7 @@ fun SupportersDialog(
                                     )
                                 }
 
-                                Divider(modifier = Modifier.padding(vertical = 4.dp))
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     members.forEach { sup ->
@@ -197,7 +197,7 @@ fun SupportersDialog(
                                     )
                                 }
 
-                                Divider(modifier = Modifier.padding(vertical = 4.dp))
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     oneOffs.forEach { sup ->
@@ -272,7 +272,7 @@ fun SupportersDialogPreview() {
                                 )
                             }
 
-                            Divider(modifier = Modifier.padding(vertical = 4.dp))
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(
@@ -312,7 +312,7 @@ fun SupportersDialogPreview() {
                                 )
                             }
 
-                            Divider(modifier = Modifier.padding(vertical = 4.dp))
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(
@@ -352,7 +352,7 @@ fun SupportersDialogPreview() {
                                 )
                             }
 
-                            Divider(modifier = Modifier.padding(vertical = 4.dp))
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(

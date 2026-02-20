@@ -1246,8 +1246,10 @@ fun preLaunchApp(
         if (isAmazonGame) {
             Timber.tag("preLaunchApp").i("Amazon Game detected for $appId — skipping cloud sync and launching container")
             // Start playtime tracking for this session
-            val amazonProductId = appId.removePrefix("AMAZON_")
-            AmazonService.startGameSession(amazonProductId)
+            val amazonAppId = appId.removePrefix("AMAZON_").toIntOrNull()
+            if (amazonAppId != null) {
+                AmazonService.startGameSessionByAppId(amazonAppId)
+            }
             setLoadingDialogVisible(false)
             onSuccess(context, appId)
             return@launch
