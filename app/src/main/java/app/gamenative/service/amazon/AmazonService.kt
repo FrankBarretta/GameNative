@@ -9,12 +9,17 @@ import app.gamenative.R
 import app.gamenative.data.AmazonCredentials
 import app.gamenative.data.AmazonGame
 import app.gamenative.data.DownloadInfo
+import app.gamenative.db.dao.AmazonGameDao
 import app.gamenative.enums.Marker
 import app.gamenative.events.AndroidEvent
 import app.gamenative.service.NotificationHelper
 import app.gamenative.utils.ContainerUtils
 import app.gamenative.utils.MarkerUtils
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
 import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -37,6 +42,17 @@ import timber.log.Timber
  */
 @AndroidEntryPoint
 class AmazonService : Service() {
+
+    /**
+     * Hilt entry point used to obtain [AmazonGameDao] from the application component
+     * in contexts where the service instance is not available (e.g. logout called
+     * while the service is stopped).
+     */
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface AmazonDaoEntryPoint {
+        fun amazonGameDao(): AmazonGameDao
+    }
 
     @Inject
     lateinit var notificationHelper: NotificationHelper
@@ -166,7 +182,12 @@ class AmazonService : Service() {
                         svc.amazonManager.deleteAllNonInstalledGames()
                         Timber.tag("Amazon").i("All non-installed Amazon games removed from database")
                     } else {
-                        Timber.tag("Amazon").w("Service not running during logout, but credentials were cleared")
+                        Timber.tag("Amazon").w("Service not running during logout — cleaning up DB via entry point")
+                        val dao = EntryPointAccessors
+                            .fromApplication(context.applicationContext, AmazonDaoEntryPoint::class.java)
+                            .amazonGameDao()
+                        withContext(Dispatchers.IO) { dao.deleteAllNonInstalledGames() }
+                        Timber.tag("Amazon").i("Non-installed Amazon games removed from database (service was stopped)")
                     }
 
                     // Stop the service
@@ -472,17 +493,10 @@ class AmazonService : Service() {
             Timber.tag("Amazon").i("Cancelling download for $productId")
             downloadInfo.cancel()
             instance.activeDownloads.remove(productId)
+            PluviaApp.events.emitJava(AndroidEvent.DownloadStatusChanged(downloadInfo.gameId, false))
             return true
         }
 
-        /**
-         * Delete installed files for [productId] and mark it as uninstalled in the DB.
-         *
-         * Uses the cached manifest (if available) to delete only the files that were
-         * originally installed, then removes empty directories bottom-up. Falls back to
-         * [File.deleteRecursively] when no manifest is cached (mirrors Nile's
-         * `utils/uninstall.py` behaviour).
-         */
         suspend fun deleteGame(context: Context, productId: String): Result<Unit> {
             val instance = getInstance()
                 ?: return Result.failure(Exception("Amazon service is not running"))
