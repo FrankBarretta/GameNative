@@ -163,7 +163,7 @@ object AmazonApiClient {
         val purchasedDate = entitlement.optString("purchasedDate", "")
 
         // Top-level entitlement UUID  — needed for GetGameDownload, NOT the product ID
-        val entitlementId = entitlement.optString("id", "")
+        val entitlementId = entitlement.optString("id", "").ifEmpty { return null }
 
         // productDetail sits between product and details:
         // product -> productDetail -> details

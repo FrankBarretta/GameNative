@@ -295,7 +295,7 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
     override fun hasPartialDownload(context: Context, libraryItem: LibraryItem): Boolean {
         if (isInstalled(context, libraryItem)) return false
         val path = AmazonConstants.getGameInstallPath(context, libraryItem.name)
-        return File(path).exists() && MarkerUtils.hasMarker(path, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
+        return File(path).exists() && !MarkerUtils.hasMarker(path, Marker.DOWNLOAD_COMPLETE_MARKER)
     }
 
     override fun onDownloadInstallClick(
@@ -352,15 +352,17 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
                 val availableBytes = app.gamenative.utils.StorageUtils.getAvailableSpace(AmazonConstants.defaultAmazonGamesPath(context))
                 val availableSpace = app.gamenative.utils.StorageUtils.formatBinarySize(availableBytes)
 
-                showAmazonInstallDialog(
-                    libraryItem.appId,
-                    AmazonInstallDialogData(
-                        downloadSize = downloadSize,
-                        installSize = installSize,
-                        availableSpace = availableSpace,
-                        installEnabled = availableBytes >= installBytes || installBytes <= 0L,
-                    ),
-                )
+                withContext(Dispatchers.Main) {
+                    showAmazonInstallDialog(
+                        libraryItem.appId,
+                        AmazonInstallDialogData(
+                            downloadSize = downloadSize,
+                            installSize = installSize,
+                            availableSpace = availableSpace,
+                            installEnabled = availableBytes >= installBytes || installBytes <= 0L,
+                        ),
+                    )
+                }
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to show install confirmation for: ${libraryItem.appId}")
             }
