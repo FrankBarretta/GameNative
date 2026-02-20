@@ -137,7 +137,6 @@ class AmazonDownloadManager @Inject constructor(
             for (batch in files.chunked(MAX_PARALLEL_DOWNLOADS)) {
                 if (!downloadInfo.isActive()) {
                     Timber.tag(TAG).w("Download cancelled by user")
-                    MarkerUtils.removeMarker(installPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
                     return@withContext Result.failure(Exception("Download cancelled"))
                 }
 
