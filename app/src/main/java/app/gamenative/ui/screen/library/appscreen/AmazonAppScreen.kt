@@ -163,7 +163,7 @@ class AmazonAppScreen : BaseAppScreen() {
         val productId = productIdOf(libraryItem)
         Timber.tag(TAG).d(
             "getGameDisplayInfo: productId=$productId name=${libraryItem.name} " +
-                "gameId=${productId.hashCode()} libraryItem.gameId=${libraryItem.gameId}"
+                "gameId=${libraryItem.gameId}"
         )
 
         var game by remember(productId) { mutableStateOf<AmazonGame?>(null) }
@@ -174,7 +174,7 @@ class AmazonAppScreen : BaseAppScreen() {
 
         androidx.compose.runtime.DisposableEffect(productId) {
             val listener: (app.gamenative.events.AndroidEvent.LibraryInstallStatusChanged) -> Unit = { event ->
-                if (event.appId == productId.hashCode()) {
+                if (event.appId == libraryItem.gameId) {
                     Timber.tag(TAG).d("[REFRESH] Install status changed for $productId — refreshing game info")
                     refreshKey++
                 }
@@ -263,7 +263,7 @@ class AmazonAppScreen : BaseAppScreen() {
             name = g?.title ?: libraryItem.name,
             iconUrl = iconUrl,
             heroImageUrl = heroImageUrl,
-            gameId = productId.hashCode(), // Stable Int from Amazon UUID — matches AmazonService event IDs
+            gameId = libraryItem.gameId,
             appId = libraryItem.appId,
             releaseDate = releaseDateTs,
             developer = developer,
@@ -709,8 +709,9 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
                             AmazonService.deleteGame(context, productId)
                             withContext(Dispatchers.Main) {
                                 BaseAppScreen.hideInstallDialog(appId)
-                                PluviaApp.events.emitJava(AndroidEvent.DownloadStatusChanged(libraryItem.appId.removePrefix("AMAZON_").toInt(), false))
-                                PluviaApp.events.emitJava(AndroidEvent.LibraryInstallStatusChanged(libraryItem.appId.removePrefix("AMAZON_").toInt()))
+                                val gameId = libraryItem.gameId
+                                PluviaApp.events.emitJava(AndroidEvent.DownloadStatusChanged(gameId, false))
+                                PluviaApp.events.emitJava(AndroidEvent.LibraryInstallStatusChanged(gameId))
                             }
                         }
                     }

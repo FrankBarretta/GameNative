@@ -25,12 +25,12 @@ val MIGRATION_13_14 = object : Migration(13, 14) {
                 app_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 product_id TEXT NOT NULL,
                 entitlement_id TEXT NOT NULL DEFAULT '',
-                title TEXT NOT NULL DEFAULT '',
-                is_installed INTEGER NOT NULL DEFAULT 0,
-                install_path TEXT NOT NULL DEFAULT '',
-                art_url TEXT NOT NULL DEFAULT '',
+                title TEXT NOT NULL,
+                is_installed INTEGER NOT NULL,
+                install_path TEXT NOT NULL,
+                art_url TEXT NOT NULL,
                 hero_url TEXT NOT NULL DEFAULT '',
-                purchased_date TEXT NOT NULL DEFAULT '',
+                purchased_date TEXT NOT NULL,
                 developer TEXT NOT NULL DEFAULT '',
                 publisher TEXT NOT NULL DEFAULT '',
                 release_date TEXT NOT NULL DEFAULT '',
@@ -40,7 +40,7 @@ val MIGRATION_13_14 = object : Migration(13, 14) {
                 product_sku TEXT NOT NULL DEFAULT '',
                 last_played INTEGER NOT NULL DEFAULT 0,
                 play_time_minutes INTEGER NOT NULL DEFAULT 0,
-                product_json TEXT NOT NULL DEFAULT ''
+                product_json TEXT NOT NULL
             )
             """.trimIndent()
         )

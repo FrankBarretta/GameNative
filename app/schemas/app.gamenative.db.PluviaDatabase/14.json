@@ -1127,7 +1127,21 @@
           "columnNames": [
             "app_id"
           ]
-        }
+        },
+        "indices": [
+          {
+            "name": "index_amazon_games_product_id",
+            "unique": false,
+            "columnNames": [
+              "product_id"
+            ],
+            "orders": [
+              "ASC"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `${INDEX_NAME}` ON `${TABLE_NAME}` (`product_id`)"
+          }
+        ],
+        "foreignKeys": []
       },
       {
         "tableName": "downloading_app_info",

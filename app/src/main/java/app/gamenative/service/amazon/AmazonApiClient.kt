@@ -261,7 +261,7 @@ object AmazonApiClient {
             put("Operation", "GetGameDownload")
         }
 
-        Timber.tag("Amazon").d("fetchGameDownload: entitlementId=$entitlementId, token=${bearerToken.take(20)}…")
+        Timber.tag("Amazon").d("fetchGameDownload: entitlementId=$entitlementId")
 
         val response = postJson(
             url = DISTRIBUTION_URL,

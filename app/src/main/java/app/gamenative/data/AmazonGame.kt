@@ -2,6 +2,7 @@ package app.gamenative.data
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -12,7 +13,7 @@ import androidx.room.PrimaryKey
  * - [appId]: Auto-generated Int primary key for internal use (events, intents, container IDs)
  * - [productId]: Amazon's actual product UUID for API calls
  */
-@Entity(tableName = "amazon_games")
+@Entity(tableName = "amazon_games", indices = [Index("product_id")])
 data class AmazonGame(
     /**
      * Auto-generated integer primary key for internal GameNative use.

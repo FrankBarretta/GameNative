@@ -466,7 +466,11 @@ class AmazonService : Service() {
                         }
                     }
                 } catch (e: Exception) {
-                    Timber.tag("Amazon").e(e, "Download exception for $productId")
+                    if (e is java.util.concurrent.CancellationException) {
+                        Timber.tag("Amazon").d("Download cancelled for $productId")
+                    } else {
+                        Timber.tag("Amazon").e(e, "Download exception for $productId")
+                    }
                     downloadInfo.setActive(false)
                 } finally {
                     instance.activeDownloads.remove(productId)

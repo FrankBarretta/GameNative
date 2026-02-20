@@ -82,7 +82,8 @@ object AmazonConstants {
      */
     fun getGameInstallPath(context: Context, gameTitle: String): String {
         val sanitized = gameTitle.replace(Regex("[^a-zA-Z0-9 \\-_]"), "").trim()
-        return Paths.get(defaultAmazonGamesPath(context), sanitized).toString()
+        val dirName = sanitized.ifEmpty { "game_${gameTitle.hashCode().toUInt()}" }
+        return Paths.get(defaultAmazonGamesPath(context), dirName).toString()
     }
 
     /**

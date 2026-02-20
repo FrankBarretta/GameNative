@@ -156,6 +156,7 @@ internal fun LibraryListPane(
         state.showCustomGamesInLibrary,
         state.showGOGInLibrary,
         state.showEpicInLibrary,
+        state.showAmazonInLibrary,
         state.totalAppsInFilter,
     ) {
         calculateInstalledCount(state)

@@ -56,7 +56,7 @@ data class EntitlementData(
             val productId = product.optString("id", "").ifEmpty { return null }
             val title = product.optString("title", "")
             val purchasedDate = entitlement.optString("purchasedDate", "")
-            val entitlementId = entitlement.optString("id", "")
+            val entitlementId = entitlement.optString("id", "").ifEmpty { return null }
 
             val productDetail = product.optJSONObject("productDetail")
             val details = productDetail?.optJSONObject("details")
