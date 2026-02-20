@@ -492,8 +492,10 @@ class AmazonService : Service() {
                     val game = instance.amazonManager.getGameById(productId)
                         ?: return@withContext Result.failure(Exception("Game not found: $productId"))
 
-                    val path = game.installPath
-                    if (path.isNotEmpty() && File(path).exists()) {
+                    val path = game.installPath.ifEmpty {
+                        AmazonConstants.getGameInstallPath(context, game.title)
+                    }
+                    if (File(path).exists()) {
                         val installDir = File(path)
                         val manifestFile = File(context.filesDir, "manifests/amazon/$productId.proto")
 

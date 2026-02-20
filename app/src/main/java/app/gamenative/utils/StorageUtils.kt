@@ -21,16 +21,7 @@ import java.nio.file.Path
 object StorageUtils {
 
     fun getAvailableSpace(path: String): Long {
-        // Walk up to the nearest existing ancestor — the free space on the
-        // filesystem is the same whether or not the leaf directory exists yet.
-        var file: File? = File(path)
-        while (file != null && !file.exists()) {
-            file = file.parentFile
-        }
-        if (file == null) {
-            throw IllegalArgumentException("Invalid path: $path")
-        }
-        val stat = StatFs(file.absolutePath)
+        val stat = StatFs(path)
         return stat.blockSizeLong * stat.availableBlocksLong
     }
 

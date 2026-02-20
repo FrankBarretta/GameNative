@@ -2,7 +2,10 @@ package app.gamenative.service.amazon
 
 import android.content.Context
 import android.net.Uri
+import app.gamenative.PrefManager
 import java.io.File
+import java.nio.file.Paths
+import timber.log.Timber
 
 /**
  * Constants for Amazon Games integration.
@@ -58,14 +61,28 @@ object AmazonConstants {
     /** Amazon Games Launcher channel ID — source for FuelSDK + AmazonGamesSDK DLLs. */
     const val LAUNCHER_CHANNEL_ID = "87d38116-4cbf-4af0-a371-a5b498975346"
 
+    fun defaultAmazonGamesPath(context: Context): String {
+        return if (PrefManager.useExternalStorage && File(PrefManager.externalStoragePath).exists()) {
+            val path = Paths.get(PrefManager.externalStoragePath, "Amazon", "games").toString()
+            Timber.i("Amazon using external storage: $path")
+            File(path).mkdirs()
+            path
+        } else {
+            val path = File(context.filesDir, "AmazonGames").absolutePath
+            Timber.i("Amazon using internal storage: $path")
+            // Ensure directory exists for StatFs
+            File(path).mkdirs()
+            path
+        }
+    }
+
     /**
-     * Returns the default installation directory for an Amazon game.
+     * Returns the installation directory for a specific Amazon game.
      * Sanitises [gameTitle] to be filesystem-safe.
      */
     fun getGameInstallPath(context: Context, gameTitle: String): String {
         val sanitized = gameTitle.replace(Regex("[^a-zA-Z0-9 \\-_]"), "").trim()
-        val base = File(context.getExternalFilesDir(null) ?: context.filesDir, "AmazonGames")
-        return File(base, sanitized).absolutePath
+        return Paths.get(defaultAmazonGamesPath(context), sanitized).toString()
     }
 
     /**

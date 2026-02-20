@@ -25,8 +25,11 @@ import app.gamenative.ui.component.dialog.AmazonInstallDialog
 import app.gamenative.ui.data.AppMenuOption
 import app.gamenative.ui.data.GameDisplayInfo
 import app.gamenative.ui.enums.AppOptionMenuType
+import app.gamenative.enums.Marker
 import app.gamenative.utils.ContainerUtils
+import app.gamenative.utils.MarkerUtils
 import com.winlator.container.ContainerData
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -283,7 +286,11 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
     override fun getDownloadProgress(context: Context, libraryItem: LibraryItem): Float =
         AmazonService.getDownloadInfoByAppId(libraryItem.gameId)?.getProgress() ?: 0f
 
-    override fun hasPartialDownload(context: Context, libraryItem: LibraryItem): Boolean = false
+    override fun hasPartialDownload(context: Context, libraryItem: LibraryItem): Boolean {
+        if (isInstalled(context, libraryItem)) return false
+        val path = AmazonConstants.getGameInstallPath(context, libraryItem.name)
+        return File(path).exists() && !MarkerUtils.hasMarker(path, Marker.DOWNLOAD_COMPLETE_MARKER)
+    }
 
     override fun onDownloadInstallClick(
         context: Context,
@@ -298,6 +305,13 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
 
         if (downloading) {
             Timber.tag(TAG).i("Download already in progress for $productId — ignoring click")
+            return
+        }
+
+        if (hasPartialDownload(context, libraryItem)) {
+            // Resume directly — no confirmation dialog needed (mirrors Steam/Epic behaviour)
+            Timber.tag(TAG).i("Resuming partial download for: ${libraryItem.appId}")
+            performDownload(context, libraryItem)
             return
         }
 
@@ -329,7 +343,7 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
                 else "Unknown"
 
                 val installDir = AmazonConstants.getGameInstallPath(context, game?.title ?: libraryItem.name)
-                val availableBytes = app.gamenative.utils.StorageUtils.getAvailableSpace(installDir)
+                val availableBytes = app.gamenative.utils.StorageUtils.getAvailableSpace(AmazonConstants.defaultAmazonGamesPath(context))
                 val availableSpace = app.gamenative.utils.StorageUtils.formatBinarySize(availableBytes)
 
                 showAmazonInstallDialog(
@@ -377,8 +391,8 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
             Timber.tag(TAG).i("Cancelling download for appId=$appId")
             AmazonService.cancelDownloadByAppId(appId)
         } else {
-            // Resume — re-start the download
-            onDownloadInstallClick(context, libraryItem) {}
+            // Resume paused/cancelled download directly — no confirmation dialog
+            performDownload(context, libraryItem)
         }
     }
 
@@ -386,11 +400,19 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
         val productId = productIdOf(libraryItem)
         Timber.tag(TAG).i("onDeleteDownloadClick: productId=$productId")
 
-        if (isDownloading(context, libraryItem)) {
-            // Cancel active download
-            Timber.tag(TAG).i("Cancelling active download for $productId")
-            AmazonService.cancelDownload(productId)
-            Toast.makeText(context, "Download cancelled", Toast.LENGTH_SHORT).show()
+        if (isDownloading(context, libraryItem) || hasPartialDownload(context, libraryItem)) {
+            // Cancel any active download first, then delete partial files
+            if (isDownloading(context, libraryItem)) {
+                Timber.tag(TAG).i("Cancelling active download for $productId")
+                AmazonService.cancelDownload(productId)
+            }
+            Timber.tag(TAG).i("Deleting partial download files for $productId")
+            CoroutineScope(Dispatchers.IO).launch {
+                AmazonService.deleteGame(context, productId)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Download deleted", Toast.LENGTH_SHORT).show()
+                }
+            }
         } else if (isInstalled(context, libraryItem)) {
             // Show uninstall confirmation dialog (debounces multi-tap)
             Timber.tag(TAG).i("Showing uninstall dialog for: ${libraryItem.appId}")
@@ -482,7 +504,9 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
                         AmazonService.getDownloadInfo(productId)?.removeProgressListener(listener)
                         currentProgressListener = null
                     }
-                    onHasPartialDownloadChanged?.invoke(false)
+                    // If not installed after download stopped → paused/cancelled: show Resume state
+                    val nowInstalled = AmazonService.isGameInstalledByAppId(gameId)
+                    onHasPartialDownloadChanged?.invoke(!nowInstalled && hasPartialDownload(context, libraryItem))
                 }
                 onStateChanged()
             }
