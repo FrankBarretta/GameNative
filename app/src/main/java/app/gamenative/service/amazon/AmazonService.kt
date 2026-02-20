@@ -773,7 +773,11 @@ class AmazonService : Service() {
         }
 
         if (shouldSync) {
-            backgroundSyncJob = serviceScope.launch { syncLibrary() }
+            if (syncInProgress) {
+                Timber.i("[Amazon] Sync already in progress — ignoring duplicate request")
+            } else {
+                backgroundSyncJob = serviceScope.launch { syncLibrary() }
+            }
         }
 
         return START_STICKY

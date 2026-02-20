@@ -1,12 +1,10 @@
 package app.gamenative.db.dao
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
-import androidx.room.Update
 import app.gamenative.data.AmazonGame
 import kotlinx.coroutines.flow.Flow
 
@@ -17,49 +15,16 @@ import kotlinx.coroutines.flow.Flow
 interface AmazonGameDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(game: AmazonGame)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(games: List<AmazonGame>)
-
-    @Update
-    suspend fun update(game: AmazonGame)
-
-    @Delete
-    suspend fun delete(game: AmazonGame)
-
-    @Query("DELETE FROM amazon_games WHERE product_id = :productId")
-    suspend fun deleteByProductId(productId: String)
-
-    @Query("DELETE FROM amazon_games WHERE app_id = :appId")
-    suspend fun deleteByAppId(appId: Int)
 
     @Query("SELECT * FROM amazon_games WHERE product_id = :productId")
     suspend fun getByProductId(productId: String): AmazonGame?
-
-    @Query("SELECT * FROM amazon_games WHERE app_id = :appId")
-    suspend fun getByAppId(appId: Int): AmazonGame?
 
     @Query("SELECT * FROM amazon_games ORDER BY title ASC")
     fun getAll(): Flow<List<AmazonGame>>
 
     @Query("SELECT * FROM amazon_games ORDER BY title ASC")
     suspend fun getAllAsList(): List<AmazonGame>
-
-    @Query("SELECT * FROM amazon_games WHERE is_installed = :isInstalled ORDER BY title ASC")
-    fun getByInstallStatus(isInstalled: Boolean): Flow<List<AmazonGame>>
-
-    @Query("SELECT product_id FROM amazon_games")
-    suspend fun getAllProductIds(): List<String>
-
-    @Query("SELECT app_id FROM amazon_games")
-    suspend fun getAllAppIds(): List<Int>
-
-    @Query("SELECT COUNT(*) FROM amazon_games")
-    fun getCount(): Flow<Int>
-
-    @Query("DELETE FROM amazon_games")
-    suspend fun deleteAll()
 
     @Query(
         "UPDATE amazon_games SET is_installed = 1, install_path = :path, install_size = :size, version_id = :versionId WHERE product_id = :productId",
@@ -75,15 +40,12 @@ interface AmazonGameDao {
     @Query("UPDATE amazon_games SET last_played = :lastPlayed, play_time_minutes = :playTimeMinutes WHERE product_id = :productId")
     suspend fun updatePlaytime(productId: String, lastPlayed: Long, playTimeMinutes: Long)
 
-    // Only delete non-installed games from DB - Need to preserve any currently installed games.
+    // Only delete non-installed games from DB — preserves any currently installed games.
     @Query("DELETE FROM amazon_games WHERE is_installed = false")
     suspend fun deleteAllNonInstalledGames()
 
     @Query("SELECT * FROM amazon_games WHERE product_id IN (:productIds)")
     suspend fun getGamesByProductIds(productIds: List<String>): List<AmazonGame>
-
-    @Query("SELECT * FROM amazon_games WHERE app_id IN (:appIds)")
-    suspend fun getGamesByAppIds(appIds: List<Int>): List<AmazonGame>
 
     /**
      * Upsert Amazon games while preserving install status and install path.
