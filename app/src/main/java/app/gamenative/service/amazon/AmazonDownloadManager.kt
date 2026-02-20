@@ -10,6 +10,7 @@ import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -194,6 +195,10 @@ class AmazonDownloadManager @Inject constructor(
             Result.success(Unit)
 
         } catch (e: Exception) {
+            if (e is CancellationException) {
+                downloadInfo.setActive(false)
+                throw e
+            }
             Timber.tag(TAG).e(e, "Download failed for ${game.title}: ${e.message}")
             MarkerUtils.removeMarker(installPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
             downloadInfo.updateStatusMessage("Failed: ${e.message}")
