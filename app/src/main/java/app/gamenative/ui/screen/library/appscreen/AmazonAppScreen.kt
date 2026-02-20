@@ -12,19 +12,25 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import app.gamenative.PluviaApp
 import app.gamenative.R
 import app.gamenative.data.AmazonGame
 import app.gamenative.data.LibraryItem
+import app.gamenative.events.AndroidEvent
 import app.gamenative.service.amazon.AmazonConstants
 import app.gamenative.service.amazon.AmazonService
 import app.gamenative.ui.component.dialog.AmazonInstallDialog
+import app.gamenative.ui.component.dialog.MessageDialog
+import app.gamenative.ui.component.dialog.state.MessageDialogState
 import app.gamenative.ui.data.AppMenuOption
 import app.gamenative.ui.data.GameDisplayInfo
 import app.gamenative.ui.enums.AppOptionMenuType
+import app.gamenative.ui.enums.DialogType
 import app.gamenative.enums.Marker
 import app.gamenative.utils.ContainerUtils
 import app.gamenative.utils.MarkerUtils
@@ -401,18 +407,17 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
         Timber.tag(TAG).i("onDeleteDownloadClick: productId=$productId")
 
         if (isDownloading(context, libraryItem) || hasPartialDownload(context, libraryItem)) {
-            // Cancel any active download first, then delete partial files
-            if (isDownloading(context, libraryItem)) {
-                Timber.tag(TAG).i("Cancelling active download for $productId")
-                AmazonService.cancelDownload(productId)
-            }
-            Timber.tag(TAG).i("Deleting partial download files for $productId")
-            CoroutineScope(Dispatchers.IO).launch {
-                AmazonService.deleteGame(context, productId)
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Download deleted", Toast.LENGTH_SHORT).show()
-                }
-            }
+            showInstallDialog(
+                libraryItem.appId,
+                MessageDialogState(
+                    visible = true,
+                    type = DialogType.CANCEL_APP_DOWNLOAD,
+                    title = context.getString(R.string.cancel_download_prompt_title),
+                    message = context.getString(R.string.epic_delete_download_message),
+                    confirmBtnText = context.getString(R.string.yes),
+                    dismissBtnText = context.getString(R.string.no),
+                )
+            )
         } else if (isInstalled(context, libraryItem)) {
             // Show uninstall confirmation dialog (debounces multi-tap)
             Timber.tag(TAG).i("Showing uninstall dialog for: ${libraryItem.appId}")
@@ -677,7 +682,52 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
         onBack: () -> Unit,
     ) {
         val context = LocalContext.current
+        val scope = rememberCoroutineScope()
         val appId = libraryItem.appId
+        val productId = productIdOf(libraryItem)
+
+        // ── Cancel-download / delete-partial confirmation dialog ──
+        var installDialogState by remember(appId) {
+            mutableStateOf(BaseAppScreen.getInstallDialogState(appId) ?: MessageDialogState(false))
+        }
+        LaunchedEffect(appId) {
+            snapshotFlow { BaseAppScreen.getInstallDialogState(appId) }
+                .collect { state ->
+                    installDialogState = state ?: MessageDialogState(false)
+                }
+        }
+
+        if (installDialogState.visible) {
+            val onConfirmClick: (() -> Unit)? = when (installDialogState.type) {
+                DialogType.CANCEL_APP_DOWNLOAD -> {
+                    {
+                        Timber.tag(TAG).i("Confirmed cancel/delete download for: $productId")
+                        val downloadInfo = AmazonService.getDownloadInfo(productId)
+                        downloadInfo?.cancel()
+                        scope.launch {
+                            downloadInfo?.awaitCompletion()
+                            AmazonService.deleteGame(context, productId)
+                            withContext(Dispatchers.Main) {
+                                BaseAppScreen.hideInstallDialog(appId)
+                                PluviaApp.events.emitJava(AndroidEvent.DownloadStatusChanged(libraryItem.appId.removePrefix("AMAZON_").toInt(), false))
+                                PluviaApp.events.emitJava(AndroidEvent.LibraryInstallStatusChanged(libraryItem.appId.removePrefix("AMAZON_").toInt()))
+                            }
+                        }
+                    }
+                }
+                else -> null
+            }
+            MessageDialog(
+                visible = installDialogState.visible,
+                onDismissRequest = { BaseAppScreen.hideInstallDialog(appId) },
+                onConfirmClick = onConfirmClick,
+                onDismissClick = { BaseAppScreen.hideInstallDialog(appId) },
+                confirmBtnText = installDialogState.confirmBtnText,
+                dismissBtnText = installDialogState.dismissBtnText,
+                title = installDialogState.title,
+                message = installDialogState.message,
+            )
+        }
 
         // ── Install confirmation (full-screen, matches Steam GameManagerDialog style) ──
         var amazonInstallData by remember(appId) {
