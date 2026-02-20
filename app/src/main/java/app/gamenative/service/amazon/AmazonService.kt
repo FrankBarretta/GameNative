@@ -439,6 +439,7 @@ class AmazonService : Service() {
 
                     if (result.isSuccess) {
                         Timber.tag("Amazon").i("Download succeeded for $productId")
+                        downloadInfo.setActive(false)
                         // Update install info cache
                         instance.installInfoCache[productId] = CachedInstallInfo(
                             isInstalled = true,
@@ -457,6 +458,7 @@ class AmazonService : Service() {
                     } else {
                         val error = result.exceptionOrNull()
                         Timber.tag("Amazon").e(error, "Download failed for $productId")
+                        downloadInfo.setActive(false)
                         withContext(Dispatchers.Main) {
                             android.widget.Toast.makeText(
                                 context,

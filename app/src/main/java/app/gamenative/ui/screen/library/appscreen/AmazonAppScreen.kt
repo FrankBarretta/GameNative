@@ -295,7 +295,7 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
     override fun hasPartialDownload(context: Context, libraryItem: LibraryItem): Boolean {
         if (isInstalled(context, libraryItem)) return false
         val path = AmazonConstants.getGameInstallPath(context, libraryItem.name)
-        return File(path).exists() && !MarkerUtils.hasMarker(path, Marker.DOWNLOAD_COMPLETE_MARKER)
+        return File(path).exists() && MarkerUtils.hasMarker(path, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
     }
 
     override fun onDownloadInstallClick(
