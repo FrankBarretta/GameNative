@@ -10,7 +10,6 @@ import app.gamenative.db.dao.CachedLicenseDao
 import app.gamenative.db.dao.DownloadingAppInfoDao
 import app.gamenative.db.dao.EncryptedAppTicketDao
 import app.gamenative.db.migration.ROOM_MIGRATION_V7_to_V8
-import app.gamenative.db.migrations.MIGRATION_13_14
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -28,7 +27,7 @@ class DatabaseModule {
         // The db will be considered unstable during development.
         // Once stable we should add a (room) db migration
         return Room.databaseBuilder(context, PluviaDatabase::class.java, DATABASE_NAME)
-            .addMigrations(ROOM_MIGRATION_V7_to_V8, MIGRATION_13_14)
+            .addMigrations(ROOM_MIGRATION_V7_to_V8)
             .fallbackToDestructiveMigration(true)
             .build()
     }
