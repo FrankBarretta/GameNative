@@ -44,7 +44,7 @@ interface AmazonGameDao {
     suspend fun updatePlaytime(productId: String, lastPlayed: Long, playTimeMinutes: Long)
 
     // Only delete non-installed games from DB — preserves any currently installed games.
-    @Query("DELETE FROM amazon_games WHERE is_installed = false")
+    @Query("DELETE FROM amazon_games WHERE is_installed = 0")
     suspend fun deleteAllNonInstalledGames()
 
     @Query("SELECT * FROM amazon_games WHERE product_id IN (:productIds)")
