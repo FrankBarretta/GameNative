@@ -33,16 +33,16 @@ import app.gamenative.ui.enums.AppOptionMenuType
 import app.gamenative.ui.enums.DialogType
 import app.gamenative.enums.Marker
 import app.gamenative.utils.ContainerUtils
+import app.gamenative.utils.DateTimeUtils
 import app.gamenative.utils.MarkerUtils
 import com.winlator.container.ContainerData
+import com.winlator.core.StringUtils
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import java.time.LocalDate
-import java.time.ZonedDateTime
 import java.util.Locale
 
 /**
@@ -103,54 +103,6 @@ class AmazonAppScreen : BaseAppScreen() {
         fun productIdOf(libraryItem: LibraryItem): String =
             AmazonService.getProductIdByAppId(libraryItem.gameId) ?: ""
 
-        /** Format a byte count as a user-friendly size string. */
-        private fun formatBytes(bytes: Long): String {
-            val kb = 1024.0
-            val mb = kb * 1024
-            val gb = mb * 1024
-            return when {
-                bytes >= gb -> String.format(Locale.US, "%.1f GB", bytes / gb)
-                bytes >= mb -> String.format(Locale.US, "%.1f MB", bytes / mb)
-                bytes >= kb -> String.format(Locale.US, "%.1f KB", bytes / kb)
-                else -> "$bytes B"
-            }
-        }
-
-        /**
-         * Parse an Amazon release-date string into a Unix timestamp in seconds.
-         *
-         * Amazon may return dates in several formats:
-         *  - Full ISO-8601:  "2022-08-18T17:50:00Z"
-         *  - Short ISO-8601 date: "2022-08-18"
-         *  - Year only:      "2022"
-         */
-        fun parseReleaseDate(dateStr: String): Long {
-            if (dateStr.isBlank()) return 0L
-            return try {
-                when {
-                    // Full ISO-8601 with timezone (e.g. "2022-08-18T17:50:00Z" or +offset)
-                    dateStr.contains('T') -> {
-                        ZonedDateTime.parse(dateStr).toInstant().epochSecond
-                    }
-                    // yyyy-MM-dd
-                    dateStr.length == 10 && dateStr[4] == '-' -> {
-                        LocalDate.parse(dateStr).atStartOfDay().toInstant(
-                            java.time.ZoneOffset.UTC
-                        ).epochSecond
-                    }
-                    // Four-digit year only
-                    dateStr.length == 4 -> {
-                        LocalDate.of(dateStr.toInt(), 1, 1).atStartOfDay().toInstant(
-                            java.time.ZoneOffset.UTC
-                        ).epochSecond
-                    }
-                    else -> 0L
-                }
-            } catch (e: Exception) {
-                Timber.tag(TAG).w(e, "Failed to parse Amazon release date: $dateStr")
-                0L
-            }
-        }
     }
 
     // ── BaseAppScreen contract ─────────────────────────────────────────────
@@ -219,10 +171,10 @@ class AmazonAppScreen : BaseAppScreen() {
             ?: g?.publisher?.takeIf { it.isNotEmpty() }
             ?: ""
 
-        val releaseDateTs = g?.releaseDate?.let { parseReleaseDate(it) } ?: 0L
+        val releaseDateTs = g?.releaseDate?.let { DateTimeUtils.parseStoreReleaseDateToEpochSeconds(it) } ?: 0L
 
         val sizeFromStore = if ((g?.downloadSize ?: 0L) > 0L) {
-            formatBytes(g!!.downloadSize)
+            StringUtils.formatBytes(g!!.downloadSize)
         } else {
             null
         }
@@ -272,7 +224,7 @@ class AmazonAppScreen : BaseAppScreen() {
             } else {
                 null
             },
-            sizeOnDisk = if ((g?.installSize ?: 0L) > 0L) formatBytes(g!!.installSize) else null,
+            sizeOnDisk = if ((g?.installSize ?: 0L) > 0L) StringUtils.formatBytes(g!!.installSize) else null,
             sizeFromStore = sizeFromStore,
             lastPlayedText = lastPlayedFormatted,
             playtimeText = playtimeFormatted,

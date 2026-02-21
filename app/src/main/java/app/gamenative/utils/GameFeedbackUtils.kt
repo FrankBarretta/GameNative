@@ -3,7 +3,11 @@ package app.gamenative.utils
 import android.content.Context
 import android.os.Build
 import app.gamenative.BuildConfig
+import app.gamenative.data.GameSource
 import app.gamenative.service.SteamService
+import app.gamenative.service.amazon.AmazonService
+import app.gamenative.service.epic.EpicService
+import app.gamenative.service.gog.GOGService
 import com.winlator.container.Container
 import com.winlator.core.FileUtils
 import com.winlator.core.GPUInformation
@@ -53,14 +57,38 @@ object GameFeedbackUtils {
     ) = withContext(Dispatchers.IO) {
         Timber.d("GameFeedbackUtils: Starting submitGameFeedback method with rating=$rating")
         try {
+            val gameSource = ContainerUtils.extractGameSourceFromContainerId(appId)
             val gameId = ContainerUtils.extractGameIdFromContainerId(appId)
             val container = ContainerUtils.getContainer(context, appId)
             val configJson = Json.parseToJsonElement(container.containerJson).jsonObject
             Timber.d("config string is: " + container.containerJson)
             Timber.d("configJson: $configJson")
-            // Get the game name from container or use a fallback
-            val appInfo = SteamService.getAppInfoOf(gameId)!!
-            val gameName = appInfo.name
+            val gameName = when (gameSource) {
+                GameSource.STEAM -> {
+                    SteamService.getAppInfoOf(gameId)?.name
+                }
+
+                GameSource.GOG -> {
+                    GOGService.getGOGGameOf(gameId.toString())?.title
+                }
+
+                GameSource.EPIC -> {
+                    EpicService.getEpicGameOf(gameId)?.title
+                }
+
+                GameSource.AMAZON -> {
+                    val productId = AmazonService.getProductIdByAppId(gameId)
+                    if (!productId.isNullOrBlank()) {
+                        AmazonService.getAmazonGameOf(productId)?.title
+                    } else {
+                        null
+                    }
+                }
+
+                GameSource.CUSTOM_GAME -> {
+                    container.name
+                }
+            }?.takeIf { it.isNotBlank() } ?: container.name.ifBlank { "App $gameId" }
             Timber.d("GameFeedbackUtils: Game name: $gameName")
 
             // Get device model

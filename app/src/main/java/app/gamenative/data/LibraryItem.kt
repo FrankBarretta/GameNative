@@ -69,9 +69,9 @@ data class LibraryItem(
      * Helper property to get the game ID as an integer.
      * Extracts the numeric part after the source prefix (e.g., "STEAM_123" → 123).
      *
-     * All game sources now use integer IDs:
-     * - Steam/Epic/GOG/Custom: numeric IDs from their respective platforms
-     * - Amazon: auto-generated Int primary key (following Epic pattern)
+     * Notes:
+     * - GOG IDs are not guaranteed numeric upstream; this property falls back to `0` if parsing fails.
+     * - Amazon uses an auto-generated Int primary key in local DB.
      */
     val gameId: Int
         get() {

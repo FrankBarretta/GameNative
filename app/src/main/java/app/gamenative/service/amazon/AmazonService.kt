@@ -817,6 +817,16 @@ class AmazonService : Service() {
         Timber.i("[Amazon] Service destroyed")
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        if (!hasActiveOperations()) {
+            Timber.i("[Amazon] Task removed and no active work — stopping service")
+            stopSelf()
+        } else {
+            Timber.i("[Amazon] Task removed but active work exists — keeping service alive")
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     // ── Instance helpers (for callers that hold a direct reference) ───────────
