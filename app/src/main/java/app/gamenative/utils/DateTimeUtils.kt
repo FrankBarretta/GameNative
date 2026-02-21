@@ -18,9 +18,11 @@ object DateTimeUtils {
 
                 dateStr.contains('T') &&
                     (dateStr.contains('+') || dateStr.substringAfterLast('T').contains('-')) -> {
-                    ZonedDateTime.parse(dateStr, DateTimeFormatter.ISO_DATE_TIME)
-                        .toInstant()
-                        .epochSecond
+                    runCatching {
+                        ZonedDateTime.parse(dateStr, DateTimeFormatter.ISO_DATE_TIME)
+                    }.getOrElse {
+                        ZonedDateTime.parse(dateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssZ"))
+                    }.toInstant().epochSecond
                 }
 
                 dateStr.contains('T') -> {
