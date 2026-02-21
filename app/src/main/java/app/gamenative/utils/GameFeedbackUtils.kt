@@ -8,6 +8,7 @@ import app.gamenative.service.SteamService
 import app.gamenative.service.amazon.AmazonService
 import app.gamenative.service.epic.EpicService
 import app.gamenative.service.gog.GOGService
+import app.gamenative.utils.CustomGameScanner
 import com.winlator.container.Container
 import com.winlator.core.FileUtils
 import com.winlator.core.GPUInformation
@@ -61,32 +62,44 @@ object GameFeedbackUtils {
             val configJson = Json.parseToJsonElement(container.containerJson).jsonObject
             Timber.d("config string is: " + container.containerJson)
             Timber.d("configJson: $configJson")
-            val gameName = when (gameSource) {
-                GameSource.STEAM -> {
-                    SteamService.getAppInfoOf(gameId)?.name
+            // Get the game name from container or use a fallback
+            val gameName = when(gameSource) {
+                GameSource.CUSTOM_GAME -> {
+                    val folderPath = CustomGameScanner.findCustomGameById(gameId) ?: ""
+                    if(folderPath.isNotEmpty()){
+                        val game = CustomGameScanner.createLibraryItemFromFolder(folderPath)
+                        game?.name ?: ""
+                    }
+                    else {
+                        ""
+                    }
                 }
-
-                GameSource.GOG -> {
-                    GOGService.getGOGGameOf(gameId.toString())?.title
-                }
-
-                GameSource.EPIC -> {
-                    EpicService.getEpicGameOf(gameId)?.title
-                }
-
                 GameSource.AMAZON -> {
                     val productId = AmazonService.getProductIdByAppId(gameId)
                     if (!productId.isNullOrBlank()) {
-                        AmazonService.getAmazonGameOf(productId)?.title
+                        AmazonService.getAmazonGameOf(productId)?.title ?: ""
                     } else {
-                        null
+                        ""
                     }
                 }
-
-                GameSource.CUSTOM_GAME -> {
-                    container.name
+                GameSource.EPIC -> {
+                    val game = EpicService.getEpicGameOf(gameId)
+                    game?.title ?: ""
                 }
-            }?.takeIf { it.isNotBlank() } ?: container.name.ifBlank { "App $gameId" }
+                GameSource.GOG -> {
+                    val game = GOGService.getGOGGameOf(gameId.toString())
+                    game?.title ?: ""
+                }
+                GameSource.STEAM -> {
+                    val appInfo = SteamService.getAppInfoOf(gameId)
+                    appInfo?.name ?: ""
+                }
+            }
+
+            if(gameName.isEmpty()){
+                Timber.e("SubmitGameFeedback: Could not get game name for appId $appId")
+                return@withContext false
+            }
             Timber.d("GameFeedbackUtils: Game name: $gameName")
 
             // Get device model
