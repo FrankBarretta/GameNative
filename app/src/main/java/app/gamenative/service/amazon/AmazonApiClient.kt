@@ -30,8 +30,6 @@ object AmazonApiClient {
     private const val GET_LIVE_VERSION_IDS_TARGET =
         "com.amazon.animusdistributionservice.external.AnimusDistributionService.GetLiveVersionIds"
 
-    private const val USER_AGENT = "com.amazon.agslauncher.win/3.0.9202.1"
-    private const val KEY_ID = "d5dc8b8b-86c8-4fc4-ae93-18c0def5314d"
 
     /** Result of a `GetGameDownload` call. */
     data class GameDownloadSpec(
@@ -94,7 +92,7 @@ object AmazonApiClient {
             put("nextToken", if (nextToken != null) nextToken else JSONObject.NULL)
             put("maxResults", 50)
             put("productIdFilter", JSONObject.NULL)
-            put("keyId", KEY_ID)
+            put("keyId", AmazonConstants.GAMING_KEY_ID)
             put("hardwareHash", hardwareHash)
         }
 
@@ -114,7 +112,7 @@ object AmazonApiClient {
                 .post(requestBody)
                 .header("X-Amz-Target", target)
                 .header("x-amzn-token", bearerToken)
-                .header("User-Agent", USER_AGENT)
+                .header("User-Agent", AmazonConstants.GAMING_USER_AGENT)
                 .header("Content-Type", "application/json")
                 .header("Content-Encoding", "amz-1.0")
                 .build()
@@ -361,7 +359,7 @@ object AmazonApiClient {
                 .url(url)
                 .get()
                 .header("x-amzn-token", bearerToken)
-                .header("User-Agent", USER_AGENT)
+                .header("User-Agent", AmazonConstants.GAMING_USER_AGENT)
                 .build()
 
             Net.http.newCall(request).execute().use { response ->

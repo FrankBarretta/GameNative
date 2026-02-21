@@ -44,6 +44,10 @@ object AmazonConstants {
     // ── User-Agent ──────────────────────────────────────────────────────────
     const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
 
+    // ── Amazon Gaming API identifiers ───────────────────────────────────────
+    const val GAMING_USER_AGENT = "com.amazon.agslauncher.win/3.0.9202.1"
+    const val GAMING_KEY_ID = "d5dc8b8b-86c8-4fc4-ae93-18c0def5314d"
+
     // ── SDK / Launcher channel ──────────────────────────────────────────────
     const val LAUNCHER_CHANNEL_ID = "87d38116-4cbf-4af0-a371-a5b498975346"
 

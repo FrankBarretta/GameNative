@@ -152,7 +152,7 @@ object AmazonAuthClient {
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val body = JSONObject().apply {
-                put("requested_extensions", listOf("device_info", "customer_info"))
+                put("requested_extensions", JSONArray().apply { put("device_info"); put("customer_info") })
             }
 
             val request = Request.Builder()
@@ -164,15 +164,15 @@ object AmazonAuthClient {
                 .post(body.toString().toRequestBody(JSON_MEDIA))
                 .build()
 
-            val response = httpClient.newCall(request).execute()
+            httpClient.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string() ?: ""
 
-            if (!response.isSuccessful) {
-                val errorBody = response.body?.string() ?: ""
-                Timber.w("[Amazon] Deregister returned ${response.code}: $errorBody")
-                // Non-fatal: credentials will still be cleared locally
-            } else {
-                response.body?.close() // Close response body on success path
-                Timber.i("[Amazon] Device deregistered successfully")
+                if (!response.isSuccessful) {
+                    Timber.w("[Amazon] Deregister returned ${response.code}: $responseBody")
+                    // Non-fatal: credentials will still be cleared locally
+                } else {
+                    Timber.i("[Amazon] Device deregistered successfully")
+                }
             }
 
             Result.success(Unit)

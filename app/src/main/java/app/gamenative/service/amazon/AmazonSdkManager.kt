@@ -109,8 +109,7 @@ object AmazonSdkManager {
                 writeVersionFile(sdkRoot, spec.versionId)
             }
 
-            // Return true even with partial failures — some SDK files are better than none
-            downloaded > 0
+            failed == 0
         }
 
     /** Copy cached SDK files into the Wine prefix ProgramData directory. */
