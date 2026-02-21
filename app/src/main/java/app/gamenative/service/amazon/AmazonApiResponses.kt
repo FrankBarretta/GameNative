@@ -2,15 +2,8 @@ package app.gamenative.service.amazon
 
 import org.json.JSONObject
 
-/**
- * Typed data classes for Amazon Gaming Distribution API responses.
- * These replace raw JSONObject parsing with structured types for better type safety.
- */
+/** Typed models for Amazon Gaming Distribution API responses. */
 
-/**
- * Response from GetEntitlements API call.
- * Contains a page of owned games and an optional token for fetching the next page.
- */
 data class EntitlementsResponse(
     val entitlements: List<EntitlementData>,
     val nextToken: String?,
@@ -33,9 +26,6 @@ data class EntitlementsResponse(
     }
 }
 
-/**
- * A single entitlement (owned game) from the API.
- */
 data class EntitlementData(
     val id: String,              // Top-level entitlement UUID (needed for GetGameDownload)
     val productId: String,       // Product ID (game identifier)
@@ -104,9 +94,6 @@ data class EntitlementData(
     }
 }
 
-/**
- * Response from GetGameDownload and SDK download API calls.
- */
 data class GameDownloadResponse(
     val downloadUrl: String,
     val versionId: String,
@@ -120,9 +107,6 @@ data class GameDownloadResponse(
     }
 }
 
-/**
- * Response from GetLiveVersionIds API call.
- */
 data class LiveVersionIdsResponse(
     val versionMap: Map<String, String>,
 ) {

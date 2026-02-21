@@ -12,23 +12,12 @@ import timber.log.Timber
 import java.net.URL
 import java.security.MessageDigest
 
-/**
- * Low-level HTTP client for the Amazon Gaming Distribution service.
- *
- * Mirrors nile's `Library.request_distribution()` and `Library._get_sync_request_data()`.
- * Endpoint: https://gaming.amazon.com/api/distribution/entitlements
- * Target:   com.amazon.animusdistributionservice.entitlement.AnimusEntitlementsService.GetEntitlements
- */
+/** Low-level client for Amazon Gaming distribution APIs. */
 object AmazonApiClient {
 
     private const val ENTITLEMENTS_URL =
         "https://gaming.amazon.com/api/distribution/entitlements"
 
-    /**
-     * Base URL for the public distribution service — used by GetGameDownload, GetLiveVersionIds, etc.
-     * Distinct from ENTITLEMENTS_URL (which is only for GetEntitlements).
-     * Confirmed from nile: constants.AMAZON_GAMING_DISTRIBUTION
-     */
     private const val DISTRIBUTION_URL =
         "https://gaming.amazon.com/api/distribution/v2/public"
 
@@ -44,7 +33,7 @@ object AmazonApiClient {
     private const val USER_AGENT = "com.amazon.agslauncher.win/3.0.9202.1"
     private const val KEY_ID = "d5dc8b8b-86c8-4fc4-ae93-18c0def5314d"
 
-    /** Result of a GetGameDownload call. */
+    /** Result of a `GetGameDownload` call. */
     data class GameDownloadSpec(
         val downloadUrl: String,
         val versionId: String,
@@ -52,13 +41,7 @@ object AmazonApiClient {
 
     // ── Public API ───────────────────────────────────────────────────────────
 
-    /**
-     * Fetches all entitlements (owned games) for the authenticated user.
-     *
-     * @param bearerToken  The `access_token` from [AmazonAuthManager].
-     * @param deviceSerial The device serial number (used to compute hardwareHash).
-     * @return A list of [AmazonGame] objects parsed from the response.
-     */
+    /** Fetch all owned-game entitlements for the authenticated user. */
     suspend fun getEntitlements(
         bearerToken: String,
         deviceSerial: String,
@@ -152,10 +135,7 @@ object AmazonApiClient {
         }
     }
 
-    /**
-     * Parse a single entitlement JSON object into an [AmazonGame].
-     * Entitlement shape (from nile): { product: { id, title, productDetail: { details: {...} }, ... }, ... }
-     */
+    /** Parse one entitlement JSON object into an [AmazonGame]. */
     private fun parseEntitlement(entitlement: JSONObject): AmazonGame? {
         val product = entitlement.optJSONObject("product") ?: return null
         val productId = product.optString("id", "").ifEmpty { return null }
@@ -197,13 +177,7 @@ object AmazonApiClient {
         )
     }
 
-    /**
-     * Resolve the primary (icon/box) artwork URL.
-     *
-     * Live API structure (confirmed from device logs):
-     *   product -> productDetail -> iconUrl          (box art)
-     *   product -> productDetail -> details -> logoUrl  (transparent logo PNG, fallback)
-     */
+    /** Resolve primary artwork URL. */
     private fun resolveArtUrl(productDetail: JSONObject?, details: JSONObject?): String {
         // Primary: iconUrl lives directly on productDetail, NOT inside details
         val iconUrl = productDetail?.optString("iconUrl", "") ?: ""
@@ -216,13 +190,7 @@ object AmazonApiClient {
         return ""
     }
 
-    /**
-     * Resolve the hero/background artwork URL for the detail screen.
-     *
-     * Live API structure (confirmed from device logs):
-     *   product -> productDetail -> details -> backgroundUrl1  (primary background)
-     *   product -> productDetail -> details -> backgroundUrl2  (secondary background)
-     */
+    /** Resolve hero/background artwork URL. */
     private fun resolveHeroUrl(details: JSONObject?): String {
         val bg1 = details?.optString("backgroundUrl1", "") ?: ""
         if (bg1.isNotEmpty()) return bg1
@@ -233,7 +201,7 @@ object AmazonApiClient {
         return ""
     }
 
-    /** SHA-256 of [input], hex-encoded in UPPERCASE — matches nile's hardwareHash. */
+    /** SHA-256 of [input], hex-encoded in uppercase. */
     private fun sha256Upper(input: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
         val hashBytes = digest.digest(input.toByteArray(Charsets.UTF_8))
@@ -242,16 +210,7 @@ object AmazonApiClient {
 
     // ── Download API ─────────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Fetches the download manifest spec for a game.
-     *
-     * Mirrors nile's `Library.get_game_manifest(id)` where `id` is the top-level
-     * entitlement UUID (NOT the product ID).
-     *
-     * @param entitlementId  The UUID from [AmazonGame.entitlementId].
-     * @param bearerToken    The `access_token` from [AmazonAuthManager].
-     * @return [GameDownloadSpec] on success, null on failure.
-     */
+    /** Fetch the download manifest spec for a game. */
     suspend fun fetchGameDownload(
         entitlementId: String,
         bearerToken: String,
@@ -281,16 +240,7 @@ object AmazonApiClient {
 
     // ── Live version checking ───────────────────────────────────────────────────────
 
-    /**
-     * Fetches live version IDs for a list of product IDs.
-     *
-     * Mirrors nile’s `Library.get_live_version_ids(product_ids)` which calls
-     * `AnimusDistributionService.GetLiveVersionIds`.
-     *
-     * @param adgProductIds  List of Amazon product IDs (e.g. "amzn1.adg.product.XXXX").
-     * @param bearerToken    The `access_token` from [AmazonAuthManager].
-     * @return Map of productId → liveVersionId, or null on failure.
-     */
+    /** Fetch live version IDs for product IDs. */
     suspend fun fetchLiveVersionIds(
         adgProductIds: List<String>,
         bearerToken: String,
@@ -327,13 +277,7 @@ object AmazonApiClient {
         result
     }
 
-    /**
-     * Checks whether a single game has an update available by comparing the stored
-     * [AmazonGame.versionId] with the live version from Amazon.
-     *
-     * @return `true` if the live version differs from the stored version, `false` if up-to-date,
-     *         or `null` on API failure.
-     */
+    /** Check whether a game has an update available. */
     suspend fun isUpdateAvailable(
         productId: String,
         storedVersionId: String,
@@ -355,15 +299,7 @@ object AmazonApiClient {
 
     // ── Download size pre-fetch ──────────────────────────────────────────────────────────────
 
-    /**
-     * Fetch the total download size (in bytes) for a game by downloading and parsing
-     * its manifest. This contacts the Amazon distribution service, downloads the
-     * manifest.proto, and sums the file sizes.
-     *
-     * @param entitlementId  The UUID from [AmazonGame.entitlementId].
-     * @param bearerToken    The `access_token` from [AmazonAuthManager].
-     * @return Total install size in bytes, or null on failure.
-     */
+    /** Fetch total download size by downloading and parsing the manifest. */
     suspend fun fetchDownloadSize(
         entitlementId: String,
         bearerToken: String,
@@ -413,17 +349,7 @@ object AmazonApiClient {
 
     // ── SDK / Launcher channel ──────────────────────────────────────────────────────────────
 
-    /**
-     * Fetches the download spec for the Amazon Games Launcher / SDK channel.
-     *
-     * Mirrors nile's `Library.get_sdk()` — calls
-     * `GET {DISTRIBUTION_URL}/download/channel/{channelId}`.
-     *
-     * The response has the same shape as GetGameDownload (`downloadUrl`, `versionId`).
-     *
-     * @param bearerToken  The `access_token` from [AmazonAuthManager].
-     * @return [GameDownloadSpec] on success, null on failure.
-     */
+    /** Fetch the download spec for the launcher/SDK channel. */
     suspend fun fetchSdkDownload(
         bearerToken: String,
     ): GameDownloadSpec? = withContext(Dispatchers.IO) {

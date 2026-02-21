@@ -19,9 +19,7 @@ enum class GameCompatibilityStatus {
     GPU_COMPATIBLE
 }
 
-/**
- * Data class for the Library list
- */
+/** Library list item. */
 data class LibraryItem(
     val index: Int = 0,
     val appId: String = "",
@@ -65,14 +63,7 @@ data class LibraryItem(
             }
         }
 
-    /**
-     * Helper property to get the game ID as an integer.
-     * Extracts the numeric part after the source prefix (e.g., "STEAM_123" → 123).
-     *
-     * Notes:
-     * - GOG IDs are not guaranteed numeric upstream; this property falls back to `0` if parsing fails.
-     * - Amazon uses an auto-generated Int primary key in local DB.
-     */
+    /** Numeric game ID extracted from the source-prefixed appId; returns 0 if parsing fails. */
     val gameId: Int
         get() {
             val idPart = appId.removePrefix("${gameSource.name}_")

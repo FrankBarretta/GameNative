@@ -10,9 +10,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
 
-/**
- * Response from Amazon device registration (maps to nile's token payload).
- */
+/** Token response from Amazon device registration. */
 data class AmazonAuthResponse(
     val accessToken: String,
     val refreshToken: String,
@@ -20,28 +18,13 @@ data class AmazonAuthResponse(
     val tokenType: String,
 )
 
-/**
- * Low-level HTTP client for Amazon's OAuth / device-auth APIs.
- *
- * Uses the same OkHttp instance (`Net.http`) as the Epic and GOG clients.
- */
+/** Low-level client for Amazon OAuth/device-auth APIs. */
 object AmazonAuthClient {
 
     private val httpClient = Net.http
     private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
-    /**
-     * Register a new device with Amazon, exchanging the PKCE authorization
-     * code for access + refresh tokens.
-     *
-     * Matches nile `authorization.py  → _register_device()`.
-     *
-     * @param authorizationCode  The `openid.oa2.authorization_code` captured from the redirect.
-     * @param codeVerifier       The PKCE code verifier generated at the start of the flow.
-     * @param deviceSerial       The random device serial used for this session.
-     * @param clientId           The hex-encoded client_id (`serial#DEVICE_TYPE`).
-     * @return [AmazonAuthResponse] on success, or a failure Result.
-     */
+    /** Exchange a PKCE authorization code for access and refresh tokens. */
     suspend fun registerDevice(
         authorizationCode: String,
         codeVerifier: String,
@@ -113,11 +96,7 @@ object AmazonAuthClient {
         }
     }
 
-    /**
-     * Refresh an access token using a stored refresh token.
-     *
-     * Matches nile `authorization.py  → _refresh_token()`.
-     */
+    /** Refresh an access token using a stored refresh token. */
     suspend fun refreshAccessToken(
         refreshToken: String,
         clientId: String,
@@ -165,11 +144,7 @@ object AmazonAuthClient {
         }
     }
 
-    /**
-     * De-register a device (logout / revoke tokens).
-     *
-     * Matches nile `authorization.py  → deregister()`.
-     */
+    /** De-register a device as part of logout. */
     suspend fun deregisterDevice(
         accessToken: String,
         deviceSerial: String,

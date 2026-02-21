@@ -7,23 +7,7 @@ import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/**
- * Amazon game manifest parser.
- *
- * Amazon distributes game content via protobuf manifests signed with RSA/SHA-256.
- * The binary layout (from nile/nile/models/manifest.py) is:
- *
- *   [4 bytes big-endian uint32: header_size]
- *   [header_size bytes:         ManifestHeader (protobuf)]
- *   [remaining bytes:           Manifest (protobuf, LZMA-compressed or raw)]
- *
- * Proto package: tv.twitch.fuel.sds
- *
- * We hand-parse the protobuf binary rather than using code generation, since the
- * schema is small and well-defined and this avoids the proto gradle plugin setup.
- *
- * Signature verification is intentionally skipped for the initial implementation.
- */
+/** Amazon game manifest parser. */
 object AmazonManifest {
 
     // ── Public data model ────────────────────────────────────────────────────
@@ -31,11 +15,11 @@ object AmazonManifest {
     data class ManifestFile(
         val path: String,
         val size: Long,
-        /** 0 = sha256, 1 = shake128 */
+        /** 0 = sha256, 1 = shake128. */
         val hashAlgorithm: Int,
         val hashBytes: ByteArray,
     ) {
-        /** Returns the path with backslashes replaced — files use Windows-style paths. */
+        /** Returns the path with backslashes replaced. */
         val unixPath: String get() = path.replace('\\', '/')
     }
 
@@ -48,17 +32,13 @@ object AmazonManifest {
         val packages: List<ManifestPackage>,
     ) {
         val allFiles: List<ManifestFile> get() = packages.flatMap { it.files }
-        /** Sum of all File.size fields — this is the on-disk installed size. */
+        /** Sum of all file sizes. */
         val totalInstallSize: Long get() = allFiles.sumOf { it.size }
     }
 
     // ── Entry point ──────────────────────────────────────────────────────────
 
-    /**
-     * Parse an Amazon manifest binary.
-     *
-     * @throws IllegalArgumentException if the content is malformed.
-     */
+    /** Parse an Amazon manifest binary. */
     fun parse(content: ByteArray): ParsedManifest {
         require(content.size > 4) { "Manifest too short: ${content.size} bytes" }
 
@@ -89,10 +69,7 @@ object AmazonManifest {
 
     // ── Protobuf binary helpers ──────────────────────────────────────────────
 
-    /**
-     * Read a protobuf varint from [stream].
-     * Returns -1L if the stream is exhausted (EOF on the first byte).
-     */
+    /** Read a protobuf varint from [stream]. */
     private fun readVarint(stream: java.io.InputStream): Long {
         var result = 0L
         var shift = 0
@@ -108,7 +85,7 @@ object AmazonManifest {
         }
     }
 
-    /** Read a length-delimited field (string, bytes, embedded message). */
+    /** Read a length-delimited field. */
     private fun readLengthDelimited(stream: java.io.InputStream): ByteArray {
         val len = readVarint(stream).toInt()
         require(len >= 0) { "Negative length-delimited size" }
@@ -122,7 +99,7 @@ object AmazonManifest {
         return bytes
     }
 
-    /** Skip a field of the given wire type without parsing it. */
+    /** Skip a field of the given wire type. */
     private fun skipField(stream: java.io.InputStream, wireType: Int) {
         when (wireType) {
             0 -> readVarint(stream)

@@ -8,25 +8,10 @@ import org.json.JSONObject
 import timber.log.Timber
 import java.io.File
 
-/**
- * Manages Amazon Games authentication and credential lifecycle.
- *
- * Stores credentials as JSON in the app's private files directory:
- *   `{filesDir}/amazon/credentials.json`
- *
- * The file holds:
- *   - access_token / refresh_token
- *   - device_serial / client_id  (needed for refresh & deregister)
- *   - expires_at  (epoch millis)
- */
+/** Manages Amazon authentication and credential lifecycle. */
 object AmazonAuthManager {
 
-    /**
-     * In-flight PKCE state kept between [startAuthFlow] and [authenticateWithCode].
-     * Cleared after a successful exchange or on cancellation.
-     *
-     * @Volatile ensures visibility across threads during the OAuth callback flow.
-     */
+    /** In-flight PKCE state between start and code exchange. */
     @Volatile private var pendingCodeVerifier: String? = null
     @Volatile private var pendingDeviceSerial: String? = null
     @Volatile private var pendingClientId: String? = null
@@ -47,11 +32,7 @@ object AmazonAuthManager {
 
     // ── Auth flow (step 1): prepare PKCE & return the sign-in URL ───────────
 
-    /**
-     * Prepares a new PKCE session and returns the Amazon sign-in URL to load
-     * in a WebView.  The generated `code_verifier` and `device_serial` are
-     * stored in memory until [authenticateWithCode] is called.
-     */
+    /** Prepare a new PKCE session and return the sign-in URL. */
     fun startAuthFlow(): String {
         val serial = AmazonPKCEGenerator.generateDeviceSerial()
         val clientId = AmazonPKCEGenerator.generateClientId(serial)
@@ -74,14 +55,7 @@ object AmazonAuthManager {
 
     // ── Auth flow (step 2): exchange auth-code for tokens ───────────────────
 
-    /**
-     * Completes the PKCE OAuth flow by exchanging the authorization code for
-     * access/refresh tokens via device registration.
-     *
-     * @param context Android context for credential storage
-     * @param authorizationCode The `openid.oa2.authorization_code` from the redirect
-     * @return [AmazonCredentials] on success
-     */
+    /** Complete PKCE by exchanging an authorization code for tokens. */
     suspend fun authenticateWithCode(
         context: Context,
         authorizationCode: String,
@@ -136,10 +110,7 @@ object AmazonAuthManager {
 
     // ── Get / refresh credentials ───────────────────────────────────────────
 
-    /**
-     * Returns stored credentials, automatically refreshing the access token
-     * if it is expired (with a 5-minute buffer).
-     */
+    /** Return stored credentials, refreshing access token when needed. */
     suspend fun getStoredCredentials(context: Context): Result<AmazonCredentials> {
         return try {
             val credentials = loadCredentials(context)
@@ -182,10 +153,7 @@ object AmazonAuthManager {
 
     // ── Logout ──────────────────────────────────────────────────────────────
 
-    /**
-     * Logs out by deregistering the device (best-effort) and deleting local
-     * credential storage.
-     */
+    /** Logout by best-effort deregister + local credential cleanup. */
     suspend fun logout(context: Context): Result<Unit> {
         return try {
             val credentials = loadCredentials(context)

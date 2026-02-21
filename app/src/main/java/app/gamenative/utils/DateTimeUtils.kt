@@ -8,14 +8,7 @@ import java.time.format.DateTimeFormatter
 
 object DateTimeUtils {
 
-    /**
-     * Parse common storefront release-date formats to Unix epoch seconds.
-     * Supports:
-     * - Full ISO-8601 with `Z` or timezone offset
-     * - `yyyy-MM-dd`
-     * - `yyyy`
-     * Returns 0 when parsing fails.
-     */
+    /** Parse common storefront release-date formats to epoch seconds. */
     fun parseStoreReleaseDateToEpochSeconds(dateStr: String): Long {
         if (dateStr.isBlank()) return 0L
 

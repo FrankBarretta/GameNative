@@ -10,24 +10,14 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Amazon library manager — the Amazon equivalent of GOGManager / EpicManager.
- *
- * Responsibilities:
- *  1. Load stored credentials via [AmazonAuthManager].
- *  2. Call [AmazonApiClient.getEntitlements] to retrieve the user's library.
- *  3. Upsert results into the [AmazonGameDao] Room table, preserving install status.
- */
+/** Amazon library manager and DB bridge. */
 @Singleton
 class AmazonManager @Inject constructor(
     private val amazonGameDao: AmazonGameDao,
     @ApplicationContext private val context: Context,
 ) {
 
-    /**
-     * Refresh the Amazon library from the API and persist results to the DB.
-     * Safe to call from a coroutine running on any dispatcher.
-     */
+    /** Refresh the Amazon library from API and persist it in DB. */
     suspend fun refreshLibrary() = withContext(Dispatchers.IO) {
         Timber.i("[Amazon] Starting library refresh…")
 
@@ -52,58 +42,52 @@ class AmazonManager @Inject constructor(
         Timber.i("[Amazon] Library refresh complete — ${games.size} game(s) in DB")
     }
 
-    /**
-     * Look up a single [AmazonGame] by its product ID (e.g. "amzn1.adg.product.XXXX").
-     * Returns null if not found.
-     */
+    /** Look up a game by product ID. */
     suspend fun getGameById(productId: String): AmazonGame? = withContext(Dispatchers.IO) {
         amazonGameDao.getByProductId(productId)
     }
 
-    /**
-     * Look up a single [AmazonGame] by its auto-generated Int primary key ([AmazonGame.appId]).
-     * Returns null if not found.
-     */
+    /** Look up a game by appId. */
     suspend fun getGameByAppId(appId: Int): AmazonGame? = withContext(Dispatchers.IO) {
         amazonGameDao.getByAppId(appId)
     }
 
-    /** Return all Amazon games from the DB (for cache population). */
+    /** Return all Amazon games from DB. */
     suspend fun getAllGames(): List<AmazonGame> = withContext(Dispatchers.IO) {
         amazonGameDao.getAllAsList()
     }
 
-    /** Mark a game as installed and persist its install path, size, and version. */
+    /** Mark a game as installed and persist install metadata. */
     suspend fun markInstalled(productId: String, installPath: String, installSize: Long, versionId: String = "") =
         withContext(Dispatchers.IO) {
             amazonGameDao.markAsInstalled(productId, installPath, installSize, versionId)
             Timber.i("[Amazon] Marked installed: $productId at $installPath (${installSize}B, version=$versionId)")
         }
 
-    /** Mark a game as not installed (clears install path and size). */
+    /** Mark a game as not installed. */
     suspend fun markUninstalled(productId: String) = withContext(Dispatchers.IO) {
         amazonGameDao.markAsUninstalled(productId)
         Timber.i("[Amazon] Marked uninstalled: $productId")
     }
 
-    /** Update the cached download size for a game (e.g. after fetching the manifest). */
+    /** Update cached download size for a game. */
     suspend fun updateDownloadSize(productId: String, size: Long) = withContext(Dispatchers.IO) {
         amazonGameDao.updateDownloadSize(productId, size)
         Timber.i("[Amazon] Updated download size for $productId: $size bytes")
     }
 
-    /** Record playtime after a game session ends. */
+    /** Record cumulative playtime for a game session. */
     suspend fun updatePlaytime(productId: String, lastPlayed: Long, playTimeMinutes: Long) = withContext(Dispatchers.IO) {
         amazonGameDao.updatePlaytime(productId, lastPlayed, playTimeMinutes)
         Timber.i("[Amazon] Updated playtime for $productId: lastPlayed=$lastPlayed, totalMinutes=$playTimeMinutes")
     }
 
-    /** Get the stored bearer token (needed by AmazonDownloadManager). */
+    /** Get the stored bearer token. */
     suspend fun getBearerToken(): String? = withContext(Dispatchers.IO) {
         AmazonAuthManager.getStoredCredentials(context).getOrNull()?.accessToken
     }
 
-    /** Delete all non-installed Amazon games from DB on logout. */
+    /** Delete all non-installed Amazon games on logout. */
     suspend fun deleteAllNonInstalledGames() = withContext(Dispatchers.IO) {
         amazonGameDao.deleteAllNonInstalledGames()
         Timber.i("[Amazon] Deleted all non-installed games from DB")

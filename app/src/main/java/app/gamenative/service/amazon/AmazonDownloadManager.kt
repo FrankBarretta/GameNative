@@ -20,16 +20,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import timber.log.Timber
 
-/**
- * Handles native downloading of Amazon games without the nile CLI.
- *
- * Flow:
- *  1. [AmazonApiClient.fetchGameDownload] → [AmazonApiClient.GameDownloadSpec] (downloadUrl, versionId)
- *  2. GET `{downloadUrl}/manifest.proto` → [AmazonManifest.parse] → file list + sizes
- *  3. Download each file from `{downloadUrl}/{file.unixPath}` in parallel batches
- *  4. Verify SHA-256 (when available) and write to [installPath]
- *  5. Mark installed in DB via [AmazonManager.markInstalled]
- */
+/** Handles native downloading of Amazon games. */
 @Singleton
 class AmazonDownloadManager @Inject constructor(
     private val amazonManager: AmazonManager,
@@ -49,14 +40,7 @@ class AmazonDownloadManager @Inject constructor(
         private const val TAG = "Amazon"
     }
 
-    /**
-     * Download and install an Amazon game.
-     *
-     * @param context Android context (used for path resolution)
-     * @param game    The game to download (must have a non-blank [AmazonGame.entitlementId])
-     * @param installPath Full path to the directory where files will be written
-     * @param downloadInfo Progress tracker; caller should set the job before this returns
-     */
+    /** Download and install an Amazon game. */
     suspend fun downloadGame(
         context: Context,
         game: AmazonGame,
@@ -325,10 +309,7 @@ class AmazonDownloadManager @Inject constructor(
         }
     }
 
-    /**
-     * Insert [segment] into the path portion of [baseUrl], before any query string.
-     * e.g. appendPath("https://host/foo?q=1", "bar") → "https://host/foo/bar?q=1"
-     */
+    /** Append [segment] to [baseUrl] path before any query string. */
     private fun appendPath(baseUrl: String, segment: String): String {
         val qIdx = baseUrl.indexOf('?')
         return if (qIdx == -1) {
@@ -340,7 +321,7 @@ class AmazonDownloadManager @Inject constructor(
         }
     }
 
-    /** Synchronously download raw bytes from [url]. Returns null on any error. */
+    /** Download raw bytes from [url], returning null on error. */
     private fun fetchBytes(url: String): ByteArray? = try {
         val request = Request.Builder().url(url).build()
         okHttpClient.newCall(request).execute().use { response ->

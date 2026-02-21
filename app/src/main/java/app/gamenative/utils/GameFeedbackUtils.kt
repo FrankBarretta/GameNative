@@ -44,9 +44,7 @@ object GameFeedbackUtils {
     )
 
 
-    /**
-     * Submits game feedback to Supabase
-     */
+    /** Submit game feedback to Supabase. */
     suspend fun submitGameFeedback(
         context: Context,
         supabase: SupabaseClient,
@@ -182,9 +180,7 @@ object GameFeedbackUtils {
 
     @Serializable private data class IdRow(val id: Long)
 
-    /**
-     * Helper extension to submit game run data to Supabase
-     */
+    /** Helper extension that writes a game run record to Supabase. */
     suspend fun SupabaseClient.logRun(
         gameName: String,
         deviceModel: String,

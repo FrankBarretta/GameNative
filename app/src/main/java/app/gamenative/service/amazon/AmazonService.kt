@@ -33,21 +33,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 
-/**
- * Amazon Games foreground service.
- *
- * Responsibilities:
- *  - Library sync via [AmazonManager] (calls Amazon distribution API directly, no nile binary)
- *  - Game download/install via [AmazonDownloadManager]
- */
+/** Amazon Games foreground service. */
 @AndroidEntryPoint
 class AmazonService : Service() {
 
-    /**
-     * Hilt entry point used to obtain [AmazonGameDao] from the application component
-     * in contexts where the service instance is not available (e.g. logout called
-     * while the service is stopped).
-     */
+    /** Entry point to access [AmazonGameDao] when service instance is unavailable. */
     @EntryPoint
     @InstallIn(SingletonComponent::class)
     interface AmazonDaoEntryPoint {
@@ -103,10 +93,7 @@ class AmazonService : Service() {
 
         fun isSyncInProgress(): Boolean = syncInProgress
 
-        /**
-         * Returns true if the service has ongoing work (sync or downloads).
-         * Used to guard against premature service stop.
-         */
+        /** Returns true when sync or download work is still active. */
         fun hasActiveOperations(): Boolean {
             return syncInProgress || backgroundSyncJob?.isActive == true || hasActiveDownload()
         }
@@ -153,20 +140,13 @@ class AmazonService : Service() {
         fun hasStoredCredentials(context: Context): Boolean =
             AmazonAuthManager.hasStoredCredentials(context)
 
-        /**
-         * Authenticate with Amazon Games using PKCE authorization code.
-         * Called from the Settings UI after the WebView captures the code.
-         */
+        /** Authenticate with Amazon using a PKCE authorization code. */
         suspend fun authenticateWithCode(
             context: Context,
             authCode: String,
         ): Result<AmazonCredentials> = AmazonAuthManager.authenticateWithCode(context, authCode)
 
-        /**
-         * Log out of Amazon Games.
-         * Deregisters the device, clears credentials, deletes non-installed games from DB,
-         * and stops the service.
-         */
+        /** Logout, clear credentials, delete non-installed entries, and stop the service. */
         suspend fun logout(context: Context): Result<Unit> {
             return withContext(Dispatchers.IO) {
                 try {
@@ -202,10 +182,7 @@ class AmazonService : Service() {
             }
         }
 
-        /**
-         * Trigger a manual library sync, bypassing the throttle.
-         * If the service isn't running, it will be started with a sync action.
-         */
+        /** Trigger a manual library sync, bypassing throttle. */
         fun triggerLibrarySync(context: Context) {
             Timber.i("[Amazon] Manual sync requested — bypassing throttle")
             val intent = Intent(context, AmazonService::class.java)
@@ -215,12 +192,7 @@ class AmazonService : Service() {
 
         // ── Install queries ───────────────────────────────────────────────────
 
-        /**
-         * Fetch the total download size for a game by retrieving its manifest.
-         * Also caches the result in the DB for future display.
-         *
-         * @return Size in bytes, or null on failure.
-         */
+        /** Fetch and cache total download size for a game. */
         suspend fun fetchDownloadSize(productId: String): Long? {
             val svc = instance ?: return null
             val game = svc.amazonManager.getGameById(productId) ?: return null
@@ -234,18 +206,12 @@ class AmazonService : Service() {
             return size
         }
 
-        /**
-         * Returns true if the Amazon game with [productId] is marked as installed.
-         * Reads from the in-memory cache — no DB query, no thread blocking.
-         */
+        /** Return whether a game is installed, using in-memory cache. */
         fun isGameInstalled(productId: String): Boolean {
             return instance?.installInfoCache?.get(productId)?.isInstalled ?: false
         }
 
-        /**
-         * Returns true if the Amazon game with [appId] is marked as installed.
-         * Performs reverse lookup: appId → productId → installInfoCache.
-         */
+        /** Return whether a game is installed, looked up by appId. */
         fun isGameInstalledByAppId(appId: Int): Boolean {
             val productId = instance?.appIdToProductId?.get(appId) ?: return false
             return isGameInstalled(productId)
@@ -253,32 +219,20 @@ class AmazonService : Service() {
 
         // ── Playtime tracking ─────────────────────────────────────────────────
 
-        /**
-         * Mark the start of a game session for [productId].
-         * Called from preLaunchApp when an Amazon game is about to launch.
-         */
+        /** Mark the start of a game session for [productId]. */
         fun startGameSession(productId: String) {
             activeGameProductId = productId
             gameSessionStartMs = System.currentTimeMillis()
             Timber.tag("Amazon").i("Game session started for $productId")
         }
 
-        /**
-         * Mark the start of a game session by [appId].
-         * Converts appId to productId via reverse lookup.
-         */
+        /** Mark the start of a game session by appId. */
         fun startGameSessionByAppId(appId: Int) {
             val productId = instance?.appIdToProductId?.get(appId) ?: return
             startGameSession(productId)
         }
 
-        /**
-         * Record the elapsed session playtime into the database.
-         * Called from exitSteamApp when an Amazon game exits the XServer.
-         *
-         * Adds the session duration (in minutes) to the existing cumulative total
-         * and updates the lastPlayed timestamp.
-         */
+        /** Record elapsed session playtime into the database. */
         suspend fun recordSessionPlaytime() {
             val productId = activeGameProductId
             val startMs = gameSessionStartMs
@@ -307,38 +261,26 @@ class AmazonService : Service() {
             )
         }
 
-        /**
-         * Returns the [AmazonGame] for the given product ID, or null if not found / service not up.
-         */
+        /** Return [AmazonGame] for a product ID, or null if unavailable. */
         suspend fun getAmazonGameOf(productId: String): AmazonGame? {
             return withContext(Dispatchers.IO) {
                 instance?.amazonManager?.getGameById(productId)
             }
         }
 
-        /**
-         * Returns the on-disk install path for [productId], or null if not installed.
-         * Reads from the in-memory cache — no DB query, no thread blocking.
-         */
+        /** Return install path for [productId], or null if not installed. */
         fun getInstallPath(productId: String): String? {
             val info = instance?.installInfoCache?.get(productId) ?: return null
             return if (info.isInstalled && info.installPath.isNotEmpty()) info.installPath else null
         }
 
-        /**
-         * Returns the on-disk install path for [appId], or null if not installed.
-         * Used by ContainerUtils when the container ID contains the integer appId.
-         * Performs reverse lookup: appId → productId → installPath.
-         */
+        /** Return install path for [appId], or null if not installed. */
         fun getInstallPathByAppId(appId: Int): String? {
             val productId = instance?.appIdToProductId?.get(appId) ?: return null
             return getInstallPath(productId)
         }
 
-        /**
-         * Converts an appId (auto-generated Int) to its productId (Amazon UUID string).
-         * Returns null if the game is not in the cache.
-         */
+        /** Convert appId to productId using in-memory lookup. */
         fun getProductIdByAppId(appId: Int): String? {
             return instance?.appIdToProductId?.get(appId)
         }
@@ -346,12 +288,7 @@ class AmazonService : Service() {
         /** Deprecated name kept for call-site compatibility — delegates to [getInstallPath]. */
         fun getInstalledGamePath(gameId: String): String? = getInstallPath(gameId)
 
-        /**
-         * Checks whether an installed Amazon game has a newer version available.
-         * Compares the stored [AmazonGame.versionId] against the live version from Amazon.
-         *
-         * @return `true` if an update is available, `false` otherwise (including API failures).
-         */
+        /** Check whether an installed game has a newer live version. */
         suspend fun isUpdatePending(productId: String): Boolean {
             val svc = instance ?: return false
             val game = svc.amazonManager.getGameById(productId) ?: return false
@@ -372,18 +309,13 @@ class AmazonService : Service() {
             return getDownloadInfo(productId)
         }
 
-        /**
-         * Cancel an in-progress download by [appId].
-         * @return true if a download was found and cancelled.
-         */
+        /** Cancel an in-progress download by [appId]. */
         fun cancelDownloadByAppId(appId: Int): Boolean {
             val productId = instance?.appIdToProductId?.get(appId) ?: return false
             return cancelDownload(productId)
         }
 
-        /**
-         * Checks whether an installed Amazon game (by appId) has a newer version available.
-         */
+        /** Check whether an installed game (by appId) has an update available. */
         suspend fun isUpdatePendingByAppId(appId: Int): Boolean {
             val productId = instance?.appIdToProductId?.get(appId) ?: return false
             return isUpdatePending(productId)
@@ -393,11 +325,7 @@ class AmazonService : Service() {
         fun hasActiveDownload(): Boolean =
             getInstance()?.activeDownloads?.isNotEmpty() == true
 
-        /**
-         * Begin downloading [productId] to [installPath].
-         *
-         * @return A [DownloadInfo] the UI can observe for progress/status updates.
-         */
+        /** Begin downloading [productId] to [installPath]. */
         suspend fun downloadGame(
             context: Context,
             productId: String,
@@ -486,10 +414,7 @@ class AmazonService : Service() {
             return Result.success(downloadInfo)
         }
 
-        /**
-         * Cancel an in-progress download for [productId].
-         * @return true if a download was found and cancelled.
-         */
+        /** Cancel an in-progress download for [productId]. */
         fun cancelDownload(productId: String): Boolean {
             val instance = getInstance() ?: return false
             val downloadInfo = instance.activeDownloads[productId] ?: run {
@@ -617,9 +542,7 @@ class AmazonService : Service() {
 
         // ── Game verification ─────────────────────────────────────────────────
 
-        /**
-         * Result of verifying installed game files against the cached manifest.
-         */
+        /** Result of verifying installed files against cached manifest. */
         data class VerificationResult(
             val totalFiles: Int,
             val verifiedOk: Int,
@@ -631,18 +554,7 @@ class AmazonService : Service() {
             val isValid: Boolean get() = failedFiles.isEmpty()
         }
 
-        /**
-         * Verify installed files for [productId] against the cached manifest.
-         *
-         * Checks:
-         *  1. File existence
-         *  2. File size matches manifest
-         *  3. SHA-256 hash matches manifest (algorithm 0)
-         *
-         * Mirrors Nile's `nile verify {id}` command.
-         *
-         * @return [VerificationResult] with details, or a failure if manifest is missing.
-         */
+        /** Verify installed files for [productId] against cached manifest. */
         suspend fun verifyGame(context: Context, productId: String): Result<VerificationResult> {
             val instance = getInstance()
                 ?: return Result.failure(Exception("Amazon service is not running"))
@@ -849,13 +761,7 @@ class AmazonService : Service() {
         }
     }
 
-    /**
-     * Populate the in-memory install info cache from the DB.
-     * Called after library sync so that [isGameInstalled] and [getInstallPath]
-     * can answer without blocking.
-     *
-     * Also populates [appIdToProductId] for reverse lookups from ContainerUtils.
-     */
+    /** Refresh in-memory install and appId/productId lookup caches from DB. */
     private suspend fun refreshInstallInfoCache() {
         val games = withContext(Dispatchers.IO) {
             amazonManager.getAllGames()

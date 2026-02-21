@@ -7,20 +7,12 @@ import java.io.File
 import java.nio.file.Paths
 import timber.log.Timber
 
-/**
- * Constants for Amazon Games integration.
- *
- * Based on the nile launcher's PKCE OAuth2 flow:
- * https://github.com/imLinguin/nile
- */
+/** Constants for Amazon Games integration. */
 object AmazonConstants {
 
     // ── Device registration identifiers (from nile) ─────────────────────────
-    /** Amazon device type for AGS Launcher */
     const val DEVICE_TYPE = "A2UMVHOX7UP4V7"
-    /** US marketplace */
     const val MARKETPLACE_ID = "ATVPDKIKX0DER"
-    /** Application name presented to Amazon during device registration */
     const val APP_NAME = "AGSLauncher for Windows"
     const val APP_VERSION = "1.0.0"
 
@@ -44,21 +36,15 @@ object AmazonConstants {
     const val OPENID_MODE = "checkid_setup"
     const val OPENID_RETURN_TO = "https://www.amazon.com"
 
-    /**
-     * The OAuth scope for device authentication.
-     * This MUST be "device_auth_access" to get an authorization code,
-     * not an OpenID 2.0 response.
-     */
+    /** OAuth scope required for device authentication. */
     const val OA2_SCOPE = "device_auth_access"
 
-    /** Where the redirect lands after user approves login */
     const val OA2_RESPONSE_TYPE = "code"
 
     // ── User-Agent ──────────────────────────────────────────────────────────
     const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
 
     // ── SDK / Launcher channel ──────────────────────────────────────────────
-    /** Amazon Games Launcher channel ID — source for FuelSDK + AmazonGamesSDK DLLs. */
     const val LAUNCHER_CHANNEL_ID = "87d38116-4cbf-4af0-a371-a5b498975346"
 
     fun defaultAmazonGamesPath(context: Context): String {
@@ -76,24 +62,14 @@ object AmazonConstants {
         }
     }
 
-    /**
-     * Returns the installation directory for a specific Amazon game.
-     * Sanitises [gameTitle] to be filesystem-safe.
-     */
+    /** Return the install directory for a specific Amazon game title. */
     fun getGameInstallPath(context: Context, gameTitle: String): String {
         val sanitized = gameTitle.replace(Regex("[^a-zA-Z0-9 \\-_]"), "").trim()
         val dirName = sanitized.ifEmpty { "game_${gameTitle.hashCode().toUInt()}" }
         return Paths.get(defaultAmazonGamesPath(context), dirName).toString()
     }
 
-    /**
-     * Builds the full Amazon OAuth login URL for a given PKCE code-challenge
-     * and dynamically-generated client_id.
-     *
-     * @param clientId  Hex-encoded `device_serial#device_type`
-     * @param codeChallenge  Base64-URL-encoded SHA-256 of the code verifier (no padding)
-     * @return The sign-in URL to load in a WebView
-     */
+    /** Build the Amazon OAuth login URL for a PKCE challenge and dynamic clientId. */
     fun buildAuthUrl(clientId: String, codeChallenge: String): String {
         return Uri.Builder()
             .scheme("https")

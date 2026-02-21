@@ -8,46 +8,16 @@ import okhttp3.Request
 import timber.log.Timber
 import java.io.File
 
-/**
- * Manages Amazon Games SDK files (FuelSDK, AmazonGamesSDK) needed for DRM authentication.
- *
- * Flow (mirrors nile's `Library.get_sdk()`):
- *  1. `GET {distributionUrl}/download/channel/{launcherChannelId}` → downloadUrl + versionId
- *  2. `GET {downloadUrl}/manifest.proto` → parse for files under "Amazon Games Services"
- *  3. Download each SDK file from `{downloadUrl}/files/{sha256_hex}`
- *  4. Cache on disk at `{context.filesDir}/amazon_sdk/Amazon Games Services/…`
- *
- * At game launch time, [deploySdkToPrefix] copies the cached SDK files into the Wine prefix
- * so the FuelPump DRM DLLs are where games expect them (`C:\ProgramData\Amazon Games Services\…`).
- *
- * SDK files are downloaded once and cached persistently across launches.
- * A version file tracks the last-downloaded versionId to avoid re-downloading.
- */
+/** Manages cached Amazon SDK files needed for DRM authentication. */
 object AmazonSdkManager {
 
     private const val TAG = "AmazonSDK"
     private const val SDK_DIR = "amazon_sdk"
     private const val VERSION_FILE = ".sdk_version"
 
-    /** Filter: only download manifest files whose path contains this. */
     private const val SDK_PATH_FILTER = "Amazon Games Services"
 
-    /**
-     * Fine-grained filter for SDK files within the launcher manifest.
-     *
-     * The launcher manifest contains ~1300 files (the entire Amazon Games Launcher app).
-     * Games only need a tiny subset — exactly what Nile downloads:
-     *
-     *   - `FuelSDK_x64.dll`  (in `Amazon Games Services/Legacy/`)
-     *   - `AmazonGamesSDK_*` (in `Amazon Games Services/` — e.g. `AmazonGamesSDK_x64.dll`)
-     *
-     * Reference: nile/api/self_update.py `get_sdk()`:
-     *   ```python
-     *   if 'FuelSDK_x64.dll' in file.path or 'AmazonGamesSDK_' in file.path:
-     *   ```
-     *
-     * Returns true if [path] is an essential SDK file that should be downloaded.
-     */
+    /** Returns true when [path] is an essential SDK file to download. */
     private fun isSdkFile(path: String): Boolean {
         // Skip macOS resource fork files (._*) — these match the keyword filter
         // but are useless on Android/Wine
@@ -58,14 +28,7 @@ object AmazonSdkManager {
 
     // ── Public API ───────────────────────────────────────────────────────────
 
-    /**
-     * Ensure SDK files are downloaded and cached locally.
-     *
-     * If the SDK is already cached at the current version, this is a no-op.
-     * Called once during the first Amazon game launch.
-     *
-     * @return `true` if SDK files are available (either already cached or freshly downloaded).
-     */
+    /** Ensure SDK files are downloaded and cached locally. */
     suspend fun ensureSdkFiles(context: Context, bearerToken: String): Boolean =
         withContext(Dispatchers.IO) {
             val sdkRoot = File(context.filesDir, SDK_DIR)
@@ -150,23 +113,7 @@ object AmazonSdkManager {
             downloaded > 0
         }
 
-    /**
-     * Copy cached SDK files into the Wine prefix's ProgramData directory.
-     *
-     * Called synchronously during Amazon game launch (from the setup thread).
-     * The target path is `{winePrefix}/drive_c/ProgramData/Amazon Games Services/…`.
-     *
-     * Files are placed preserving their manifest paths, which matches how Nile
-     * stores them and how games expect them:
-     *  - `Amazon Games Services/Legacy/FuelSDK_x64.dll`     (FUEL_DIR)
-     *  - `Amazon Games Services/AmazonGamesSDK_x64.dll`     (sibling)
-     *  - `Amazon Games Services/AmazonGamesSDK_x86.dll`     (sibling)
-     *  - `Amazon Games Services/AmazonGamesSDK/`            (AMAZON_GAMES_SDK_PATH — kept as empty dir)
-     *
-     * @param prefixProgramData The Wine prefix ProgramData directory
-     *        (e.g. `/path/to/.wine/drive_c/ProgramData`).
-     * @return Number of files deployed, or -1 if SDK cache doesn't exist.
-     */
+    /** Copy cached SDK files into the Wine prefix ProgramData directory. */
     fun deploySdkToPrefix(context: Context, prefixProgramData: File): Int {
         val sdkRoot = File(context.filesDir, SDK_DIR)
         val sdkServicesDir = File(sdkRoot, SDK_PATH_FILTER)
@@ -200,10 +147,7 @@ object AmazonSdkManager {
         return deployed
     }
 
-    /**
-     * Whether the SDK has been downloaded (at least the version file exists and
-     * there is at least one file under the SDK services directory).
-     */
+    /** Return true when SDK cache has a version file and at least one file. */
     private fun isSdkCached(sdkRoot: File): Boolean {
         val versionFile = File(sdkRoot, VERSION_FILE)
         if (!versionFile.exists()) return false

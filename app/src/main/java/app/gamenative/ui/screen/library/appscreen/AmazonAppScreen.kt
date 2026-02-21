@@ -45,12 +45,7 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.util.Locale
 
-/**
- * Amazon-specific implementation of [BaseAppScreen].
- *
- * Amazon games are currently library-only (no download/install through GameNative).
- * This screen displays game metadata read from the Room database ([AmazonGame]).
- */
+/** Amazon-specific [BaseAppScreen] implementation. */
 class AmazonAppScreen : BaseAppScreen() {
 
     companion object {
@@ -59,7 +54,7 @@ class AmazonAppScreen : BaseAppScreen() {
         // Shared state for uninstall dialog — list of appIds that should show the dialog
         private val uninstallDialogAppIds = mutableStateListOf<String>()
 
-        /** Data needed to render the full-screen install confirmation dialog. */
+        /** State for the full-screen install confirmation dialog. */
         data class AmazonInstallDialogData(
             val downloadSize: String,
             val installSize: String,
@@ -95,11 +90,7 @@ class AmazonAppScreen : BaseAppScreen() {
         fun shouldShowUninstallDialog(appId: String): Boolean =
             uninstallDialogAppIds.contains(appId)
 
-        /**
-         * Get the raw Amazon product ID from a library item's appId.
-         * The appId contains an integer (auto-generated), which we convert to productId via lookup.
-         * Returns null if the lookup fails.
-         */
+        /** Resolve productId from a library item's appId-backed gameId. */
         fun productIdOf(libraryItem: LibraryItem): String =
             AmazonService.getProductIdByAppId(libraryItem.gameId) ?: ""
 
