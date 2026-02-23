@@ -51,7 +51,7 @@ interface SteamAppDao {
             "       REPLACE(REPLACE(license.app_ids, '[', ','), ']', ',') LIKE ('%,' || app.id || ',%') " +
             ")"
     )
-    suspend fun findDownloadableDLCApps(appId: Int): List<SteamApp>
+    suspend fun findDownloadableDLCApps(appId: Int): List<SteamApp>?
 
     @Query("SELECT * FROM steam_app AS app WHERE dlc_for_app_id = :appId AND depots = '{}' AND " +
             " EXISTS (" +
