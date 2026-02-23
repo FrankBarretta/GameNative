@@ -2175,7 +2175,7 @@ private fun getWineStartCommand(
         return launchCommand
     } else if (gameSource == GameSource.AMAZON) {
         // For Amazon games, convert appId (integer) to productId (Amazon UUID string)
-        val appIdInt = appId.removePrefix("AMAZON_").substringBefore("(").toIntOrNull()
+        val appIdInt = runCatching { ContainerUtils.extractGameIdFromContainerId(appId) }.getOrNull()
         val productId = if (appIdInt != null) {
             app.gamenative.service.amazon.AmazonService.getProductIdByAppId(appIdInt)
         } else null
