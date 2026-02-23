@@ -282,7 +282,7 @@ private fun UserLoginScreenContent(
                                 contentColor = MaterialTheme.colorScheme.primary,
                                 indicator = { tabPositions ->
                                     if (selectedTabIndex < tabPositions.size) {
-                                        TabRowDefaults.SecondaryIndicator(
+                                        TabRowDefaults.Indicator(
                                             modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
                                             height = 3.dp,
                                             color = MaterialTheme.colorScheme.primary
