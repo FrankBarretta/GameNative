@@ -320,6 +320,7 @@ class AmazonService : Service() {
                     if (result.isSuccess) {
                         Timber.tag("Amazon").i("Download succeeded for $productId")
                         downloadInfo.setActive(false)
+                        MarkerUtils.addMarker(installPath, Marker.DOWNLOAD_COMPLETE_MARKER)
                         // Update install info cache
                         instance.installInfoCache[productId] = CachedInstallInfo(
                             isInstalled = true,
