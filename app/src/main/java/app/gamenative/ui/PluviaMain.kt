@@ -51,7 +51,6 @@ import app.gamenative.enums.SaveLocation
 import app.gamenative.enums.SyncResult
 import app.gamenative.events.AndroidEvent
 import app.gamenative.service.SteamService
-import app.gamenative.service.amazon.AmazonService
 import app.gamenative.service.epic.EpicService
 import app.gamenative.service.gog.GOGService
 import app.gamenative.ui.component.ConnectingServersScreen
@@ -1329,11 +1328,6 @@ fun preLaunchApp(
         val isAmazonGame = gameSource == GameSource.AMAZON
         if (isAmazonGame) {
             Timber.tag("preLaunchApp").i("Amazon Game detected for $appId — skipping cloud sync and launching container")
-            // Start playtime tracking for this session
-            val amazonAppId = appId.removePrefix("AMAZON_").toIntOrNull()
-            if (amazonAppId != null) {
-                AmazonService.startGameSessionByAppId(amazonAppId)
-            }
             setLoadingDialogVisible(false)
             onSuccess(context, appId)
             return@launch

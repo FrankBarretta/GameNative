@@ -43,7 +43,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import java.util.Locale
 
 /** Amazon-specific [BaseAppScreen] implementation. */
 class AmazonAppScreen : BaseAppScreen() {
@@ -170,38 +169,6 @@ class AmazonAppScreen : BaseAppScreen() {
             null
         }
 
-        // Playtime info
-        val lastPlayedFormatted = remember(g?.lastPlayed) {
-            val lp = g?.lastPlayed ?: 0L
-            if (lp > 0L) {
-                java.text.SimpleDateFormat("MMM d, yyyy — h:mm a", java.util.Locale.getDefault())
-                    .format(java.util.Date(lp))
-            } else {
-                null // never played
-            }
-        }
-
-        val playtimeFormatted = remember(g?.playTimeMinutes) {
-            val totalSeconds = g?.playTimeMinutes ?: 0L  // column name is legacy, stores seconds
-            if (totalSeconds > 0L) {
-                val totalMinutes = totalSeconds / 60.0
-                when {
-                    totalMinutes < 1.0 -> "< 1 min"
-                    totalMinutes < 60.0 -> "${totalMinutes.toInt()} min"
-                    else -> {
-                        val hours = totalMinutes / 60.0
-                        if (hours % 1.0 == 0.0) {
-                            "${hours.toInt()} hrs"
-                        } else {
-                            String.format(java.util.Locale.getDefault(), "%.1f hrs", hours)
-                        }
-                    }
-                }
-            } else {
-                null
-            }
-        }
-
         return GameDisplayInfo(
             name = g?.title ?: libraryItem.name,
             iconUrl = iconUrl,
@@ -217,8 +184,8 @@ class AmazonAppScreen : BaseAppScreen() {
             },
             sizeOnDisk = if ((g?.installSize ?: 0L) > 0L) StringUtils.formatBytes(g!!.installSize) else null,
             sizeFromStore = sizeFromStore,
-            lastPlayedText = lastPlayedFormatted,
-            playtimeText = playtimeFormatted,
+            lastPlayedText = null,
+            playtimeText = null,
         )
     }
 

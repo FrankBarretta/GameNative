@@ -83,10 +83,6 @@ class AmazonService : Service() {
         private var syncInProgress: Boolean = false
         private var backgroundSyncJob: Job? = null
 
-        // Game session tracking for playtime
-        private var gameSessionStartMs: Long = 0L
-        private var activeGameProductId: String? = null
-
         private fun setSyncInProgress(inProgress: Boolean) {
             syncInProgress = inProgress
         }
@@ -215,50 +211,6 @@ class AmazonService : Service() {
         fun isGameInstalledByAppId(appId: Int): Boolean {
             val productId = instance?.appIdToProductId?.get(appId) ?: return false
             return isGameInstalled(productId)
-        }
-
-        // ── Playtime tracking ─────────────────────────────────────────────────
-
-        /** Mark the start of a game session for [productId]. */
-        fun startGameSession(productId: String) {
-            activeGameProductId = productId
-            gameSessionStartMs = System.currentTimeMillis()
-            Timber.tag("Amazon").i("Game session started for $productId")
-        }
-
-        /** Mark the start of a game session by appId. */
-        fun startGameSessionByAppId(appId: Int) {
-            val productId = instance?.appIdToProductId?.get(appId) ?: return
-            startGameSession(productId)
-        }
-
-        /** Record elapsed session playtime into the database. */
-        suspend fun recordSessionPlaytime() {
-            val productId = activeGameProductId
-            val startMs = gameSessionStartMs
-            Timber.tag("Amazon").i("recordSessionPlaytime: productId=$productId, startMs=$startMs")
-
-            if (productId == null || startMs <= 0L) {
-                Timber.tag("Amazon").w("recordSessionPlaytime: no active session to record")
-                return
-            }
-
-            val now = System.currentTimeMillis()
-            val elapsedSeconds = ((now - startMs) / 1_000L).coerceAtLeast(1)
-
-            // Reset tracking vars immediately to avoid double-counting
-            activeGameProductId = null
-            gameSessionStartMs = 0L
-
-            val svc = instance ?: return
-            val game = svc.amazonManager.getGameById(productId)
-            val previousSeconds = game?.playTimeMinutes ?: 0L  // column name is legacy, stores seconds
-            val totalSeconds = previousSeconds + elapsedSeconds
-
-            svc.amazonManager.updatePlaytime(productId, now, totalSeconds)
-            Timber.tag("Amazon").i(
-                "Session ended for $productId: +${elapsedSeconds}s → total ${totalSeconds}s (${totalSeconds / 60}min)"
-            )
         }
 
         /** Return [AmazonGame] for a product ID, or null if unavailable. */
@@ -661,11 +613,6 @@ class AmazonService : Service() {
     // ── Service lifecycle ─────────────────────────────────────────────────────
 
     private val onEndProcess: (AndroidEvent.EndProcess) -> Unit = {
-        // Record playtime synchronously before stopping — must complete before
-        // onDestroy() cancels serviceScope, so we use runBlocking on IO.
-        kotlinx.coroutines.runBlocking(Dispatchers.IO) {
-            recordSessionPlaytime()
-        }
         stop()
     }
 

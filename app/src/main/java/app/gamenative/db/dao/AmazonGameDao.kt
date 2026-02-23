@@ -40,9 +40,6 @@ interface AmazonGameDao {
     @Query("UPDATE amazon_games SET download_size = :size WHERE product_id = :productId")
     suspend fun updateDownloadSize(productId: String, size: Long)
 
-    @Query("UPDATE amazon_games SET last_played = :lastPlayed, play_time_minutes = :playTimeMinutes WHERE product_id = :productId")
-    suspend fun updatePlaytime(productId: String, lastPlayed: Long, playTimeMinutes: Long)
-
     // Only delete non-installed games from DB — preserves any currently installed games.
     @Query("DELETE FROM amazon_games WHERE is_installed = 0")
     suspend fun deleteAllNonInstalledGames()
