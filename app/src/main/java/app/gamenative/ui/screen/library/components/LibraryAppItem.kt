@@ -261,7 +261,7 @@ internal fun AppItem(
                             }
 
                             GameSource.AMAZON -> {
-                                appInfo.iconHash
+                                appInfo.iconHash to ""
                             }
 
                             GameSource.STEAM -> {
