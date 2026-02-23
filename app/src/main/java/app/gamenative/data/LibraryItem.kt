@@ -68,8 +68,5 @@ data class LibraryItem(
 
     /** Numeric game ID extracted from the source-prefixed appId; returns 0 if parsing fails. */
     val gameId: Int
-        get() {
-            val idPart = appId.removePrefix("${gameSource.name}_")
-            return idPart.toIntOrNull() ?: 0
-        }
+        get() = appId.removePrefix("${gameSource.name}_").toIntOrNull() ?: 0
 }
