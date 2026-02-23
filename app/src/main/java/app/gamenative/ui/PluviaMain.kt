@@ -51,6 +51,7 @@ import app.gamenative.enums.SaveLocation
 import app.gamenative.enums.SyncResult
 import app.gamenative.events.AndroidEvent
 import app.gamenative.service.SteamService
+import app.gamenative.service.amazon.AmazonService
 import app.gamenative.service.epic.EpicService
 import app.gamenative.service.gog.GOGService
 import app.gamenative.ui.component.ConnectingServersScreen
@@ -232,7 +233,7 @@ fun PluviaMain(
                                         }
 
                                         GameSource.AMAZON -> {
-                                            app.gamenative.service.amazon.AmazonService.isGameInstalledByAppId(gameId)
+                                            AmazonService.isGameInstalledByAppId(gameId)
                                         }
 
                                         GameSource.CUSTOM_GAME -> {
@@ -427,11 +428,11 @@ fun PluviaMain(
             }
 
             // Start AmazonService if user has Amazon credentials
-            if (app.gamenative.service.amazon.AmazonService.hasStoredCredentials(context) &&
-                !app.gamenative.service.amazon.AmazonService.isRunning
+            if (AmazonService.hasStoredCredentials(context) &&
+                !AmazonService.isRunning
             ) {
                 Timber.d("[PluviaMain]: Starting AmazonService for logged-in user")
-                app.gamenative.service.amazon.AmazonService.start(context)
+                AmazonService.start(context)
             }
 
             if (SteamService.isLoggedIn && !SteamService.keepAlive && navController.currentDestination?.route == PluviaScreen.LoginUser.route) {
