@@ -61,6 +61,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.gamenative.PluviaApp
 import app.gamenative.PrefManager
 import app.gamenative.data.GameSource
+import app.gamenative.gamefixes.GameFixesRegistry
 import app.gamenative.data.LaunchInfo
 import app.gamenative.data.LibraryItem
 import app.gamenative.data.SteamApp
@@ -328,6 +329,7 @@ fun XServerScreen(
     var showElementEditor by remember { mutableStateOf(false) }
     var elementToEdit by remember { mutableStateOf<com.winlator.inputcontrols.ControlElement?>(null) }
     var showPhysicalControllerDialog by remember { mutableStateOf(false) }
+    var isOverlayPaused by remember { mutableStateOf(false) }
 
     fun startExitWatchForUnmappedGameWindow(window: Window) {
         val winHandler = xServerView?.getxServer()?.winHandler ?: return
@@ -424,7 +426,13 @@ fun XServerScreen(
         }
 
         Timber.i("BackHandler")
-        NavigationDialog(
+
+        // Suspend game and audio while the navigation overlay is visible.
+        PluviaApp.xEnvironment?.onPause()
+        isOverlayPaused = true
+        PluviaApp.isOverlayPaused = true
+
+        val navDialog = NavigationDialog(
             context,
             object : NavigationDialog.NavigationListener {
                 override fun onNavigationItemSelected(itemId: Int) {
@@ -562,12 +570,25 @@ fun XServerScreen(
                             } else {
                                 PostHog.capture(event = "game_closed")
                             }
+                            // Resume processes before exiting so they can receive SIGTERM cleanly.
+                            PluviaApp.xEnvironment?.onResume()
+                            isOverlayPaused = false
+                            PluviaApp.isOverlayPaused = false
                             exit(xServerView!!.getxServer().winHandler, PluviaApp.xEnvironment, frameRating, currentAppInfo, container, onExit, navigateBack)
                         }
                     }
                 }
             }
-        ).show()
+        )
+        // Resume game when the overlay closes via back press, outside tap, or any non-exit item.
+        navDialog.setOnDismissListener {
+            if (PluviaApp.isOverlayPaused) {
+                PluviaApp.xEnvironment?.onResume()
+                isOverlayPaused = false
+                PluviaApp.isOverlayPaused = false
+            }
+        }
+        navDialog.show()
     }
 
     DisposableEffect(container) {
@@ -708,6 +729,26 @@ fun XServerScreen(
                 PluviaApp.touchpadView = TouchpadView(context, getxServer(), PrefManager.getBoolean("capture_pointer_on_external_mouse", true))
                 frameLayout.addView(PluviaApp.touchpadView)
                 PluviaApp.touchpadView?.setMoveCursorToTouchpoint(PrefManager.getBoolean("move_cursor_to_touchpoint", false))
+                
+                // Add invisible IME receiver to capture system keyboard input when keyboard is on external display
+                val imeDisplayContext = context.display?.let { display ->
+                    context.createDisplayContext(display)
+                } ?: context
+
+                val imeReceiver = app.gamenative.externaldisplay.IMEInputReceiver(
+                    context = context,
+                    displayContext = imeDisplayContext,
+                    xServer = getxServer(),
+                ).apply {
+                    layoutParams = android.widget.FrameLayout.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    )
+                    alpha = 0f
+                    isClickable = false
+                }
+                frameLayout.addView(imeReceiver)
+                
                 getxServer().winHandler = WinHandler(getxServer(), this)
                 win32AppWorkarounds = Win32AppWorkarounds(getxServer())
                 touchMouse = TouchMouse(getxServer())
@@ -1833,6 +1874,11 @@ private fun setupXEnvironment(
             guestProgramLauncherComponent.setFEXCorePreset(container.fexCorePreset)
         }
         guestProgramLauncherComponent.setPreUnpack {
+            try {
+                GameFixesRegistry.applyFor(context, appId)
+            } catch (e: Exception) {
+                Timber.tag("GameFixes").w(e, "Game fixes failed in preUnpack")
+            }
             unpackExecutableFile(
                 context = context,
                 needsUnpacking = container.isNeedsUnpacking,
