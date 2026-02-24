@@ -121,7 +121,7 @@ class AmazonDownloadManager @Inject constructor(
             for (batch in files.chunked(MAX_PARALLEL_DOWNLOADS)) {
                 if (!downloadInfo.isActive()) {
                     Timber.tag(TAG).w("Download cancelled by user")
-                    return@withContext Result.failure(Exception("Download cancelled"))
+                    throw CancellationException("Download cancelled")
                 }
 
                 val results = batch.map { file ->
@@ -146,6 +146,7 @@ class AmazonDownloadManager @Inject constructor(
                 completedFiles += batch.size
                 downloadInfo.updateStatusMessage("Downloading ($completedFiles/$totalFiles files)…")
                 downloadInfo.emitProgressChange()
+                downloadInfo.persistProgressSnapshot()
             }
 
             // ── 6. Cache manifest ────────────────────────────────────────
@@ -179,6 +180,8 @@ class AmazonDownloadManager @Inject constructor(
 
         } catch (e: Exception) {
             if (e is CancellationException) {
+                MarkerUtils.removeMarker(installPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
+                downloadInfo.persistProgressSnapshot()
                 downloadInfo.setActive(false)
                 throw e
             }
@@ -260,7 +263,7 @@ class AmazonDownloadManager @Inject constructor(
                     )
                 }
 
-                response.body!!.byteStream().use { input ->
+                response.body.byteStream().use { input ->
                     tmpFile.outputStream().use { output ->
                         val buf = ByteArray(8192)
                         var read: Int
@@ -273,6 +276,7 @@ class AmazonDownloadManager @Inject constructor(
                             if (bytesSinceLastEmit >= PROGRESS_EMIT_INTERVAL) {
                                 bytesSinceLastEmit = 0L
                                 downloadInfo.emitProgressChange()
+                                downloadInfo.persistProgressSnapshot()
                             }
                         }
                     }
@@ -325,7 +329,7 @@ class AmazonDownloadManager @Inject constructor(
     private fun fetchBytes(url: String): ByteArray? = try {
         val request = Request.Builder().url(url).build()
         okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) null else response.body?.bytes()
+            if (!response.isSuccessful) null else response.body.bytes()
         }
     } catch (e: Exception) {
         Timber.tag(TAG).e(e, "fetchBytes failed for $url")

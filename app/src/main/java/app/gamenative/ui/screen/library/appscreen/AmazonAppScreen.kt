@@ -31,13 +31,10 @@ import app.gamenative.ui.data.AppMenuOption
 import app.gamenative.ui.data.GameDisplayInfo
 import app.gamenative.ui.enums.AppOptionMenuType
 import app.gamenative.ui.enums.DialogType
-import app.gamenative.enums.Marker
 import app.gamenative.utils.ContainerUtils
 import app.gamenative.utils.DateTimeUtils
-import app.gamenative.utils.MarkerUtils
 import com.winlator.container.ContainerData
 import com.winlator.core.StringUtils
-import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -203,9 +200,7 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
         AmazonService.getDownloadInfoByAppId(libraryItem.gameId)?.getProgress() ?: 0f
 
     override fun hasPartialDownload(context: Context, libraryItem: LibraryItem): Boolean {
-        if (isInstalled(context, libraryItem)) return false
-        val path = AmazonConstants.getGameInstallPath(context, libraryItem.name)
-        return MarkerUtils.hasMarker(path, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
+        return AmazonService.hasPartialDownloadByAppId(context, libraryItem.gameId)
     }
 
     override fun onDownloadInstallClick(

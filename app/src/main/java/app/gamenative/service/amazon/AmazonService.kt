@@ -30,6 +30,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 
@@ -57,6 +58,9 @@ class AmazonService : Service() {
 
     // Active downloads keyed by Amazon product ID (e.g. "amzn1.adg.product.XXXX")
     private val activeDownloads = ConcurrentHashMap<String, DownloadInfo>()
+
+    // Active install paths keyed by Amazon product ID (used for robust partial-download detection)
+    private val activeDownloadPaths = ConcurrentHashMap<String, String>()
 
     // In-memory cache for install status + path — avoids runBlocking for fast UI lookups
     // Keyed by productId (the Amazon product UUID string)
@@ -204,13 +208,47 @@ class AmazonService : Service() {
 
         /** Return whether a game is installed, using in-memory cache. */
         fun isGameInstalled(productId: String): Boolean {
-            return instance?.installInfoCache?.get(productId)?.isInstalled ?: false
+            val info = instance?.installInfoCache?.get(productId) ?: return false
+            if (!info.isInstalled || info.installPath.isEmpty()) return false
+
+            // Prefer marker-based install detection (same pattern as Steam)
+            if (MarkerUtils.hasMarker(info.installPath, Marker.DOWNLOAD_COMPLETE_MARKER)) {
+                return true
+            }
+
+            // Backward-compatible fallback for installs created before marker enforcement
+            val installDir = File(info.installPath)
+            return installDir.exists() && !MarkerUtils.hasMarker(info.installPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
         }
 
         /** Return whether a game is installed, looked up by appId. */
         fun isGameInstalledByAppId(appId: Int): Boolean {
             val productId = instance?.appIdToProductId?.get(appId) ?: return false
             return isGameInstalled(productId)
+        }
+
+        /** Return expected install path for [appId], even when partially downloaded. */
+        fun getExpectedInstallPathByAppId(context: Context, appId: Int): String? {
+            val svc = instance ?: return null
+            val productId = svc.appIdToProductId[appId] ?: return null
+
+            svc.activeDownloadPaths[productId]?.let { return it }
+
+            val game = runBlocking(Dispatchers.IO) {
+                svc.amazonManager.getGameById(productId)
+            } ?: return null
+
+            val title = game.title.ifBlank { return null }
+            return AmazonConstants.getGameInstallPath(context, title)
+        }
+
+        /** Steam-style partial detection: directory exists and completion marker is absent. */
+        fun hasPartialDownloadByAppId(context: Context, appId: Int): Boolean {
+            if (getDownloadInfoByAppId(appId) != null) return true
+            if (isGameInstalledByAppId(appId)) return false
+
+            val expectedPath = getExpectedInstallPathByAppId(context, appId) ?: return false
+            return File(expectedPath).exists() && !MarkerUtils.hasMarker(expectedPath, Marker.DOWNLOAD_COMPLETE_MARKER)
         }
 
         /** Return [AmazonGame] for a product ID, or null if unavailable. */
@@ -301,8 +339,19 @@ class AmazonService : Service() {
                 gameId = game.appId,
                 downloadingAppIds = CopyOnWriteArrayList(),
             )
+            downloadInfo.setPersistencePath(installPath)
+
+            val persistedBytes = downloadInfo.loadPersistedBytesDownloaded(installPath)
+            if (persistedBytes > 0L) {
+                downloadInfo.initializeBytesDownloaded(persistedBytes)
+            }
+
             downloadInfo.setActive(true)
             instance.activeDownloads[productId] = downloadInfo
+            instance.activeDownloadPaths[productId] = installPath
+
+            // Fresh install/update run should clear stale completion marker before starting
+            MarkerUtils.removeMarker(installPath, Marker.DOWNLOAD_COMPLETE_MARKER)
 
             PluviaApp.events.emitJava(
                 AndroidEvent.DownloadStatusChanged(game.appId, true)
@@ -320,7 +369,7 @@ class AmazonService : Service() {
                     if (result.isSuccess) {
                         Timber.tag("Amazon").i("Download succeeded for $productId")
                         downloadInfo.setActive(false)
-                        MarkerUtils.addMarker(installPath, Marker.DOWNLOAD_COMPLETE_MARKER)
+                        downloadInfo.clearPersistedBytesDownloaded(installPath)
                         // Update install info cache
                         instance.installInfoCache[productId] = CachedInstallInfo(
                             isInstalled = true,
@@ -340,6 +389,7 @@ class AmazonService : Service() {
                         val error = result.exceptionOrNull()
                         Timber.tag("Amazon").e(error, "Download failed for $productId")
                         downloadInfo.setActive(false)
+                        instance.cleanupFailedInstall(context, game, installPath)
                         withContext(Dispatchers.Main) {
                             android.widget.Toast.makeText(
                                 context,
@@ -353,10 +403,12 @@ class AmazonService : Service() {
                         Timber.tag("Amazon").d("Download cancelled for $productId")
                     } else {
                         Timber.tag("Amazon").e(e, "Download exception for $productId")
+                        instance.cleanupFailedInstall(context, game, installPath)
                     }
                     downloadInfo.setActive(false)
                 } finally {
                     instance.activeDownloads.remove(productId)
+                    instance.activeDownloadPaths.remove(productId)
                     PluviaApp.events.emitJava(
                         AndroidEvent.DownloadStatusChanged(game.appId, false)
                     )
@@ -377,6 +429,7 @@ class AmazonService : Service() {
             Timber.tag("Amazon").i("Cancelling download for $productId")
             downloadInfo.cancel()
             instance.activeDownloads.remove(productId)
+            instance.activeDownloadPaths.remove(productId)
             PluviaApp.events.emitJava(AndroidEvent.DownloadStatusChanged(downloadInfo.gameId, false))
             return true
         }
@@ -689,6 +742,39 @@ class AmazonService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private suspend fun cleanupFailedInstall(context: Context, game: AmazonGame, installPath: String) {
+        withContext(Dispatchers.IO) {
+            MarkerUtils.removeMarker(installPath, Marker.DOWNLOAD_COMPLETE_MARKER)
+            MarkerUtils.removeMarker(installPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
+
+            runCatching {
+                val dir = File(installPath)
+                if (dir.exists()) {
+                    dir.deleteRecursively()
+                }
+            }.onFailure {
+                Timber.tag("Amazon").w(it, "Failed to clean partial install dir for ${game.productId}")
+            }
+
+            runCatching {
+                amazonManager.markUninstalled(game.productId)
+            }.onFailure {
+                Timber.tag("Amazon").w(it, "Failed to mark game uninstalled after failed install: ${game.productId}")
+            }
+
+            installInfoCache[game.productId] = CachedInstallInfo(
+                isInstalled = false,
+                installPath = "",
+            )
+        }
+
+        withContext(Dispatchers.Main) {
+            ContainerUtils.deleteContainer(context, "AMAZON_${game.appId}")
+        }
+
+        PluviaApp.events.emitJava(AndroidEvent.LibraryInstallStatusChanged(game.appId))
+    }
+
     // ── Instance helpers (for callers that hold a direct reference) ───────────
 
     /** Instance-method accessor for callers using [getInstance]?. */
@@ -714,6 +800,8 @@ class AmazonService : Service() {
         val games = withContext(Dispatchers.IO) {
             amazonManager.getAllGames()
         }
+        installInfoCache.clear()
+        appIdToProductId.clear()
         for (game in games) {
             // Populate install info cache (keyed by productId)
             installInfoCache[game.productId] = CachedInstallInfo(
