@@ -244,11 +244,53 @@ class AmazonService : Service() {
 
         /** Steam-style partial detection: directory exists and completion marker is absent. */
         fun hasPartialDownloadByAppId(context: Context, appId: Int): Boolean {
-            if (getDownloadInfoByAppId(appId) != null) return true
-            if (isGameInstalledByAppId(appId)) return false
+            if (getDownloadInfoByAppId(appId) != null) {
+                Timber.tag("Amazon").d("[PARTIAL] appId=$appId partial=true reason=active_download")
+                return true
+            }
+            if (isGameInstalledByAppId(appId)) {
+                Timber.tag("Amazon").d("[PARTIAL] appId=$appId partial=false reason=installed")
+                return false
+            }
 
             val expectedPath = getExpectedInstallPathByAppId(context, appId) ?: return false
-            return File(expectedPath).exists() && !MarkerUtils.hasMarker(expectedPath, Marker.DOWNLOAD_COMPLETE_MARKER)
+            val installDir = File(expectedPath)
+            if (!installDir.exists()) {
+                Timber.tag("Amazon").d("[PARTIAL] appId=$appId partial=false reason=path_missing path=$expectedPath")
+                return false
+            }
+
+            if (MarkerUtils.hasMarker(expectedPath, Marker.DOWNLOAD_COMPLETE_MARKER)) {
+                Timber.tag("Amazon").d("[PARTIAL] appId=$appId partial=false reason=complete_marker path=$expectedPath")
+                return false
+            }
+            if (MarkerUtils.hasMarker(expectedPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)) {
+                Timber.tag("Amazon").d("[PARTIAL] appId=$appId partial=true reason=in_progress_marker path=$expectedPath")
+                return true
+            }
+
+            val children = installDir.listFiles() ?: return false
+            if (children.isEmpty()) {
+                Timber.tag("Amazon").d("[PARTIAL] appId=$appId partial=false reason=empty_dir path=$expectedPath")
+                return false
+            }
+
+            val hasPartialPayload = children.any { child ->
+                when (child.name) {
+                    Marker.DOWNLOAD_COMPLETE_MARKER.fileName,
+                    Marker.DOWNLOAD_IN_PROGRESS_MARKER.fileName,
+                    ".DownloadInfo" -> {
+                        child.isDirectory && (child.listFiles()?.any { it.isFile && it.length() > 0L } == true)
+                    }
+                    else -> true
+                }
+            }
+
+            val childNames = children.joinToString(limit = 8) { it.name }
+            Timber.tag("Amazon").d(
+                "[PARTIAL] appId=$appId partial=$hasPartialPayload reason=dir_scan path=$expectedPath children=$childNames"
+            )
+            return hasPartialPayload
         }
 
         /** Return [AmazonGame] for a product ID, or null if unavailable. */
@@ -505,6 +547,31 @@ class AmazonService : Service() {
 
                         MarkerUtils.removeMarker(path, Marker.DOWNLOAD_COMPLETE_MARKER)
                         MarkerUtils.removeMarker(path, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
+
+                        // Remove metadata residue and ensure uninstall leaves no resumable state behind.
+                        val downloadInfoDir = File(installDir, ".DownloadInfo")
+                        if (downloadInfoDir.exists()) {
+                            downloadInfoDir.deleteRecursively()
+                        }
+
+                        if (installDir.exists()) {
+                            val amazonRoot = File(AmazonConstants.defaultAmazonGamesPath(context)).canonicalFile
+                            val installCanonical = installDir.canonicalFile
+                            val isUnderAmazonRoot = installCanonical.path == amazonRoot.path ||
+                                installCanonical.path.startsWith("${amazonRoot.path}${File.separator}")
+
+                            if (isUnderAmazonRoot) {
+                                installCanonical.deleteRecursively()
+                            } else {
+                                Timber.tag("Amazon").w(
+                                    "Skipping final recursive uninstall cleanup outside Amazon root: ${installCanonical.path}"
+                                )
+                            }
+
+                            Timber.tag("Amazon").i(
+                                "[UNINSTALL] cleanup productId=$productId installDirExists=${installCanonical.exists()} path=${installCanonical.path}"
+                            )
+                        }
                     }
 
                     instance.amazonManager.markUninstalled(productId)
@@ -529,6 +596,15 @@ class AmazonService : Service() {
                     withContext(Dispatchers.Main) {
                         ContainerUtils.deleteContainer(context, "AMAZON_${game.appId}")
                     }
+
+                    val postUninstallPath = AmazonConstants.getGameInstallPath(context, game.title)
+                    val postInstallDirExists = File(postUninstallPath).exists()
+                    val completeMarkerExists = MarkerUtils.hasMarker(postUninstallPath, Marker.DOWNLOAD_COMPLETE_MARKER)
+                    val inProgressMarkerExists = MarkerUtils.hasMarker(postUninstallPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
+
+                    Timber.tag("Amazon").i(
+                        "[UNINSTALL] final_state productId=$productId appId=${game.appId} installDirExists=$postInstallDirExists completeMarker=$completeMarkerExists inProgressMarker=$inProgressMarkerExists"
+                    )
 
                     PluviaApp.events.emitJava(
                         AndroidEvent.LibraryInstallStatusChanged(game.appId)

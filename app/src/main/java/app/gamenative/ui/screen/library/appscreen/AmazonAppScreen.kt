@@ -211,15 +211,18 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
         val productId = productIdOf(libraryItem)
         val installed = isInstalled(context, libraryItem)
         val downloading = isDownloading(context, libraryItem)
+        val hasPartial = hasPartialDownload(context, libraryItem)
 
-        Timber.tag(TAG).d("onDownloadInstallClick: productId=$productId, installed=$installed, downloading=$downloading")
+        Timber.tag(TAG).d(
+            "onDownloadInstallClick: productId=$productId, installed=$installed, downloading=$downloading, partial=$hasPartial"
+        )
 
         if (downloading) {
             Timber.tag(TAG).i("Download already in progress for $productId — ignoring click")
             return
         }
 
-        if (hasPartialDownload(context, libraryItem)) {
+        if (hasPartial) {
             // Resume directly — no confirmation dialog needed (mirrors Steam/Epic behaviour)
             Timber.tag(TAG).i("Resuming partial download for: ${libraryItem.appId}")
             performDownload(context, libraryItem)
