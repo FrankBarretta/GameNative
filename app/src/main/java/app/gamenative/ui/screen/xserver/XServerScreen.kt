@@ -79,6 +79,7 @@ import app.gamenative.ui.data.XServerState
 import app.gamenative.ui.theme.settingsTileColors
 import app.gamenative.utils.ContainerUtils
 import app.gamenative.utils.CustomGameScanner
+import app.gamenative.utils.ExecutableSelectionUtils
 import app.gamenative.utils.SteamTokenLogin
 import app.gamenative.utils.SteamUtils
 import com.posthog.PostHog
@@ -2233,13 +2234,10 @@ private fun getWineStartCommand(
         val resolvedRelativePath = if (fuelCommand != null) {
             fuelCommand.replace("\\", "/")
         } else {
-            val exeFile = File(installPath).walk()
-                .filter { it.extension.equals("exe", ignoreCase = true) }
-                .filter { file ->
-                    val name = file.name.lowercase()
-                    !name.contains("unins") && !name.contains("setup") && !name.contains("crash")
-                }
-                .maxByOrNull { it.length() }
+            val exeFile = ExecutableSelectionUtils.choosePrimaryExeFromDisk(
+                installDir = File(installPath),
+                gameName = File(installPath).name,
+            )
 
             if (exeFile == null) {
                 Timber.tag("XServerScreen").e("Cannot find executable for Amazon game")
