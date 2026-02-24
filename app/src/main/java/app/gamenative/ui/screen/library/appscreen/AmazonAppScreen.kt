@@ -371,6 +371,7 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
 
         val disposables = mutableListOf<() -> Unit>()
         var currentProgressListener: ((Float) -> Unit)? = null
+        var currentDownloadInfo: app.gamenative.data.DownloadInfo? = null
 
         // If download is already in progress, attach listener immediately
         val existingDownloadInfo = AmazonService.getDownloadInfo(productId)
@@ -380,11 +381,13 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
                 onProgressChanged(progress)
             }
             existingDownloadInfo.addProgressListener(progressListener)
+            currentDownloadInfo = existingDownloadInfo
             currentProgressListener = progressListener
             disposables += {
                 currentProgressListener?.let { listener ->
-                    existingDownloadInfo.removeProgressListener(listener)
+                    currentDownloadInfo?.removeProgressListener(listener)
                     currentProgressListener = null
+                    currentDownloadInfo = null
                 }
             }
             existingDownloadInfo.getProgress()?.let { onProgressChanged(it) }
@@ -397,24 +400,29 @@ override fun isInstalled(context: Context, libraryItem: LibraryItem): Boolean =
                 if (event.isDownloading) {
                     val downloadInfo = AmazonService.getDownloadInfo(productId)
                     if (downloadInfo != null) {
-                        currentProgressListener?.let { downloadInfo.removeProgressListener(it) }
+                        currentProgressListener?.let { listener ->
+                            currentDownloadInfo?.removeProgressListener(listener)
+                        }
                         val progressListener: (Float) -> Unit = { progress ->
                             Timber.tag(TAG).v("[OBSERVE] Progress for $productId: $progress")
                             onProgressChanged(progress)
                         }
                         downloadInfo.addProgressListener(progressListener)
+                        currentDownloadInfo = downloadInfo
                         currentProgressListener = progressListener
                         disposables += {
                             currentProgressListener?.let { listener ->
-                                downloadInfo.removeProgressListener(listener)
+                                currentDownloadInfo?.removeProgressListener(listener)
                                 currentProgressListener = null
+                                currentDownloadInfo = null
                             }
                         }
                     }
                 } else {
                     currentProgressListener?.let { listener ->
-                        AmazonService.getDownloadInfo(productId)?.removeProgressListener(listener)
+                        currentDownloadInfo?.removeProgressListener(listener)
                         currentProgressListener = null
+                        currentDownloadInfo = null
                     }
                     // If not installed after download stopped → paused/cancelled: show Resume state
                     val nowInstalled = AmazonService.isGameInstalledByAppId(gameId)

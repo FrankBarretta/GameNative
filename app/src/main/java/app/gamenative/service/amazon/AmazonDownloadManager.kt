@@ -204,6 +204,10 @@ class AmazonDownloadManager @Inject constructor(
     ): Result<Unit> {
         var lastException: Exception? = null
         repeat(MAX_RETRIES) { attempt ->
+            if (!downloadInfo.isActive()) {
+                throw CancellationException("Download cancelled")
+            }
+
             val result = downloadFile(baseUrl, file, installDir, downloadInfo)
             if (result.isSuccess) return result
 
@@ -269,6 +273,9 @@ class AmazonDownloadManager @Inject constructor(
                         var read: Int
                         var bytesSinceLastEmit = 0L
                         while (input.read(buf).also { read = it } != -1) {
+                                    if (!downloadInfo.isActive()) {
+                                        throw CancellationException("Download cancelled")
+                                    }
                             output.write(buf, 0, read)
                             downloadInfo.updateBytesDownloaded(read.toLong())
                             bytesSinceLastEmit += read
@@ -306,6 +313,9 @@ class AmazonDownloadManager @Inject constructor(
             tmpFile.renameTo(destFile)
 
             Result.success(Unit)
+        } catch (e: CancellationException) {
+            tmpFile.delete()
+            throw e
         } catch (e: Exception) {
             tmpFile.delete()
             Timber.tag(TAG).w(e, "Error downloading ${file.unixPath}")

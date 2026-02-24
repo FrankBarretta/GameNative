@@ -428,9 +428,6 @@ class AmazonService : Service() {
             }
             Timber.tag("Amazon").i("Cancelling download for $productId")
             downloadInfo.cancel()
-            instance.activeDownloads.remove(productId)
-            instance.activeDownloadPaths.remove(productId)
-            PluviaApp.events.emitJava(AndroidEvent.DownloadStatusChanged(downloadInfo.gameId, false))
             return true
         }
 
