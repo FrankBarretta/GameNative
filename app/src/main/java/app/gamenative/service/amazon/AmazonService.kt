@@ -14,6 +14,7 @@ import app.gamenative.enums.Marker
 import app.gamenative.events.AndroidEvent
 import app.gamenative.service.NotificationHelper
 import app.gamenative.utils.ContainerUtils
+import app.gamenative.utils.ExecutableSelectionUtils
 import app.gamenative.utils.MarkerUtils
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -315,6 +316,26 @@ class AmazonService : Service() {
         /** Convert appId to productId using in-memory lookup. */
         fun getProductIdByAppId(appId: Int): String? {
             return instance?.appIdToProductId?.get(appId)
+        }
+
+        /**
+         * Resolves the effective launch executable for an Amazon game.
+         * Returns empty string if no executable can be found.
+         */
+        fun getLaunchExecutable(containerId: String): String {
+            val appId = runCatching { ContainerUtils.extractGameIdFromContainerId(containerId) }.getOrElse { return "" }
+            if (appId <= 0) return ""
+
+            val installPath = getInstallPathByAppId(appId) ?: return ""
+            val installDir = File(installPath)
+            if (!installDir.isDirectory) return ""
+
+            val exeFile = ExecutableSelectionUtils.choosePrimaryExeFromDisk(
+                installDir = installDir,
+                gameName = installDir.name,
+            ) ?: return ""
+
+            return exeFile.path
         }
 
         /** Deprecated name kept for call-site compatibility — delegates to [getInstallPath]. */
